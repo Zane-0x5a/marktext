@@ -14,6 +14,7 @@ import { MarkdownToHtml } from '@muyajs/core'
 import { sanitize, EXPORT_DOMPURIFY_CONFIG } from './dompurify'
 import { resolveLocalImageSrc } from './resolveImageSrc'
 import { resolveLocalLinkHref } from './resolveLinkHref'
+import { getHtmlToc, type HtmlTocOptions } from './pdf'
 
 export interface HeaderFooterPart {
   type?: number
@@ -28,6 +29,8 @@ export interface ExportStyledHtmlOptions {
   extraCss?: string
   /** Pre-rendered TOC HTML (from `getHtmlToc`). Injected at `[TOC]`. */
   toc?: string
+  /** Derive the TOC from this export's rendered headings, including source edits. */
+  tocOptions?: HtmlTocOptions
   header?: HeaderFooterPart | null
   footer?: HeaderFooterPart | null
   headerFooterStyled?: boolean
@@ -172,7 +175,8 @@ export const exportStyledHTML = async(
   markdown: string,
   options: ExportStyledHtmlOptions = {}
 ): Promise<string> => {
-  const { title = '', toc = '', header, footer, headerFooterStyled, dir } = options
+  const { title = '', header, footer, headerFooterStyled, dir } = options
+  let { toc = '' } = options
   let { extraCss = '' } = options
 
   // The header/footer page table needs its own stylesheet — fold it into
@@ -193,6 +197,18 @@ export const exportStyledHTML = async(
 
   const articleMatch = /<article class="markdown-body">([\s\S]*)<\/article>/.exec(fullDoc)
   let article = articleMatch ? articleMatch[1] : fullDoc
+
+  if (options.tocOptions) {
+    const doc = new DOMParser().parseFromString(article, 'text/html')
+    const headings = Array.from(doc.body.children)
+      .filter(element => /^H[1-6]$/.test(element.tagName))
+      .map(element => ({
+        id: element.id,
+        lvl: Number(element.tagName[1]),
+        content: element.textContent?.trim() || ''
+      }))
+    toc = getHtmlToc(headings, options.tocOptions)
+  }
 
   // Resolve relative image paths to absolute file:// URLs so the saved document
   // still shows its images when opened from a different folder (issue 230).

@@ -4,7 +4,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { launchWithMarkdown, sendIpcToRenderer, expectNoRendererErrors } from './helpers'
+import { launchWithMarkdown, sendIpcToRenderer, expectNoRendererErrors, enterSourceMode } from './helpers'
 
 const image =
   'data:image/svg+xml;base64,' +
@@ -491,5 +491,43 @@ test.describe('Print preview with Chromium pagination', () => {
     })
     await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
     await waitReady(page)
+  })
+
+  test('prints the current source edits and their TOC without changing source history', async() => {
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await enterSourceMode(page, app)
+    const source = '# Current source heading\n\n[TOC]\n\n## New source section\n\nLatest unsaved source content.\n'
+    const history = await page.locator('.source-code .CodeMirror').evaluate((el, value) => {
+      const cm = (el as HTMLElement & {
+        CodeMirror?: {
+          setValue(value: string): void
+          setCursor(line: number, ch: number): void
+          historySize(): { undo: number; redo: number }
+        }
+      }).CodeMirror
+      if (!cm) throw new Error('Source editor is missing')
+      cm.setValue(value)
+      cm.setCursor(6, 5)
+      return cm.historySize()
+    }, source)
+    await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
+    await waitReady(page)
+    const pages = await readPdf(await savePdf(app, page, path.join(output, 'source.pdf')))
+    const text = pages.map(p => p.text).join('')
+    expect(text).toContain('Latest unsaved source content.')
+    expect(text.match(/New source section/g)).toHaveLength(2)
+    expect(text).not.toContain('Print fidelity')
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    const after = await page.locator('.source-code .CodeMirror').evaluate((el) => {
+      const cm = (el as HTMLElement & {
+        CodeMirror?: {
+          getValue(): string
+          historySize(): { undo: number; redo: number }
+        }
+      }).CodeMirror
+      if (!cm) throw new Error('Source editor is missing')
+      return { source: cm.getValue(), history: cm.historySize() }
+    })
+    expect(after).toEqual({ source, history })
   })
 })

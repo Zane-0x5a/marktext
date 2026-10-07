@@ -104,6 +104,16 @@ describe('exportStyledHTML — [TOC] expansion and slug matching', () => {
     { lvl: 2, content: 'Use bold and a link' }
   ]
 
+  it('derives TOC links from actual heading ids even after nested duplicate headings', async() => {
+    const out = await exportStyledHTML(NO_MUYA, '> # Same\n\n# Same\n\n[TOC]', {
+      tocOptions: { tocIncludeTopHeading: true }
+    })
+    const doc = new DOMParser().parseFromString(out, 'text/html')
+    const link = doc.querySelector('.toc-container a')
+    expect(link?.getAttribute('href')).toBe('#same-1')
+    expect(doc.querySelector('#same-1')?.closest('blockquote')).toBeNull()
+  })
+
   it('replaces the rendered <p>[TOC]</p> with the toc list', async() => {
     const toc = getHtmlToc(TOC, {})
     const out = await exportStyledHTML(NO_MUYA, MD, { toc })

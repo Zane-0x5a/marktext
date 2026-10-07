@@ -27,7 +27,7 @@ export class ImageResizeBar {
     // Pointer position and image width as of mousedown. Writing a width moves
     // the image's own edges, so live geometry is not a usable reference while
     // dragging — only this snapshot is (#5392).
-    private _dragStart: { clientX: number; width: number } | null = null;
+    private _dragStart: { clientX: number; width: number; scale: number } | null = null;
     private _eventId: string[] = [];
     private _lastScrollTop: number | null = null;
     private _resizing: boolean = false;
@@ -143,9 +143,12 @@ export class ImageResizeBar {
         const { eventCenter } = this.muya;
         this._movingAnchor = handle.getAttribute('data-position');
         const image = this._reference?.querySelector('img');
-        this._dragStart = isMouseEvent(event) && image
-            ? { clientX: event.clientX, width: image.getBoundingClientRect().width }
-            : null;
+        this._dragStart = null;
+        if (isMouseEvent(event) && image) {
+            const renderedWidth = image.getBoundingClientRect().width;
+            const width = image.offsetWidth || renderedWidth;
+            this._dragStart = { clientX: event.clientX, width, scale: renderedWidth / width || 1 };
+        }
         // A pointer dragged past the window's edge keeps driving the resize,
         // but those out-of-viewport coordinates hit test to `<html>`, whose
         // bubble path skips `<body>`. Listening on the document keeps the
@@ -178,16 +181,18 @@ export class ImageResizeBar {
         const image = this._reference!.querySelector('img');
         if (!image || !dragStart)
             return;
+        // Pointer coordinates include ancestor transforms; stored widths do not.
+        const delta = (clientX - dragStart.clientX) / dragStart.scale;
 
         // Each handle moves the edge it sits on, so the image grows by however
         // far the pointer has travelled away from where it was grabbed.
         switch (this._movingAnchor) {
             case 'left':
-                width = Math.max(dragStart.width + dragStart.clientX - clientX, 50);
+                width = Math.max(dragStart.width - delta, 50);
                 break;
 
             case 'right':
-                width = Math.max(dragStart.width + clientX - dragStart.clientX, 50);
+                width = Math.max(dragStart.width + delta, 50);
                 break;
 
             default:

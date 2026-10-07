@@ -7,6 +7,9 @@ export const PAPER_SIZES = {
   Tabloid: [279.4, 431.8]
 } as const
 
+/** Shared by page rasterization and IPC resolution validation. */
+export const PRINT_DPI = 300
+
 /** All dimensions, including margins, are in millimetres. */
 export interface PrintLayout {
   width: number

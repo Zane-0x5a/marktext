@@ -193,6 +193,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import bus from '@/bus'
 import { getPrintLayout, type PreviewRequest } from '@/services/printService'
 import type { PrintSnapshot, PrintDevice, PrintOutcome } from '@shared/types/print'
+import { PRINT_DPI } from '@shared/types/print'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -407,7 +408,7 @@ const print = async () => {
       if (canceled || disposed) break
       stagedPage.value = number
       const page = await pdf.getPage(number)
-      const view = page.getViewport({ scale: 300 / 72 })
+      const view = page.getViewport({ scale: PRINT_DPI / 72 })
       const sheet = document.createElement('canvas')
       sheet.width = Math.ceil(view.width)
       sheet.height = Math.ceil(view.height)

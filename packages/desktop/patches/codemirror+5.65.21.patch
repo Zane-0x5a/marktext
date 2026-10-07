@@ -1,0 +1,199 @@
+diff --git a/node_modules/codemirror/lib/codemirror.js b/node_modules/codemirror/lib/codemirror.js
+index df0b5ff4..e02226b5 100644
+--- a/node_modules/codemirror/lib/codemirror.js
++++ b/node_modules/codemirror/lib/codemirror.js
+@@ -2342,21 +2342,29 @@
+   // an array of bottom offsets for the lines that make up a drawn
+   // line. When lineWrapping is on, there might be more than one
+   // height.
++  // Internal measurements are logical CSS pixels. Hosts may transform the
++  // editor without changing layout by supplying a live coordinateScale getter.
++  function coordinateScale(display) {
++    var cm = display.wrapper.CodeMirror, getter = cm && cm.options.coordinateScale;
++    return typeof getter == "function" ? getter() || 1 : 1
++  }
++
+   function ensureLineHeights(cm, lineView, rect) {
+     var wrapping = cm.options.lineWrapping;
+     var curWidth = wrapping && displayWidth(cm);
+     if (!lineView.measure.heights || wrapping && lineView.measure.width != curWidth) {
+       var heights = lineView.measure.heights = [];
++      var scale = coordinateScale(cm.display);
+       if (wrapping) {
+         lineView.measure.width = curWidth;
+         var rects = lineView.text.firstChild.getClientRects();
+         for (var i = 0; i < rects.length - 1; i++) {
+           var cur = rects[i], next = rects[i + 1];
+-          if (Math.abs(cur.bottom - next.bottom) > 2)
+-            { heights.push((cur.bottom + next.top) / 2 - rect.top); }
++          if (Math.abs(cur.bottom - next.bottom) / scale > 2)
++            { heights.push(((cur.bottom + next.top) / 2 - rect.top) / scale); }
+         }
+       }
+-      heights.push(rect.bottom - rect.top);
++      heights.push((rect.bottom - rect.top) / scale);
+     }
+   }
+ 
+@@ -2536,15 +2544,16 @@
+         { rect = nullRect; }
+     }
+ 
+-    var rtop = rect.top - prepared.rect.top, rbot = rect.bottom - prepared.rect.top;
++    var scale = coordinateScale(cm.display);
++    var rtop = (rect.top - prepared.rect.top) / scale, rbot = (rect.bottom - prepared.rect.top) / scale;
+     var mid = (rtop + rbot) / 2;
+     var heights = prepared.view.measure.heights;
+     var i = 0;
+     for (; i < heights.length - 1; i++)
+       { if (mid < heights[i]) { break } }
+     var top = i ? heights[i - 1] : 0, bot = heights[i];
+-    var result = {left: (collapse == "right" ? rect.right : rect.left) - prepared.rect.left,
+-                  right: (collapse == "left" ? rect.left : rect.right) - prepared.rect.left,
++    var result = {left: ((collapse == "right" ? rect.right : rect.left) - prepared.rect.left) / scale,
++                  right: ((collapse == "left" ? rect.left : rect.right) - prepared.rect.left) / scale,
+                   top: top, bottom: bot};
+     if (!rect.left && !rect.right) { result.bogus = true; }
+     if (!cm.options.singleCursorHeightPerLine) { result.rtop = rtop; result.rbottom = rbot; }
+@@ -2623,6 +2632,10 @@
+     if (context == "local") { yOff += paddingTop(cm.display); }
+     else { yOff -= cm.display.viewOffset; }
+     if (context == "page" || context == "window") {
++      var scale = coordinateScale(cm.display);
++      rect.left *= scale; rect.right *= scale;
++      rect.top = (rect.top + yOff) * scale; rect.bottom = (rect.bottom + yOff) * scale;
++      yOff = 0;
+       var lOff = cm.display.lineSpace.getBoundingClientRect();
+       yOff += lOff.top + (context == "window" ? 0 : pageScrollY(doc(cm)));
+       var xOff = lOff.left + (context == "window" ? 0 : pageScrollX(doc(cm)));
+@@ -2636,19 +2649,19 @@
+   // Context may be "window", "page", "div", or "local"./null.
+   function fromCoordSystem(cm, coords, context) {
+     if (context == "div") { return coords }
+-    var left = coords.left, top = coords.top;
++    var left = coords.left, top = coords.top, scale = coordinateScale(cm.display);
+     // First move into "page" coordinate system
+     if (context == "page") {
+       left -= pageScrollX(doc(cm));
+       top -= pageScrollY(doc(cm));
+     } else if (context == "local" || !context) {
+       var localBox = cm.display.sizer.getBoundingClientRect();
+-      left += localBox.left;
+-      top += localBox.top;
++      left = left * scale + localBox.left;
++      top = top * scale + localBox.top;
+     }
+ 
+     var lineSpaceBox = cm.display.lineSpace.getBoundingClientRect();
+-    return {left: left - lineSpaceBox.left, top: top - lineSpaceBox.top}
++    return {left: (left - lineSpaceBox.left) / scale, top: (top - lineSpaceBox.top) / scale}
+   }
+ 
+   function charCoords(cm, pos, context, lineObj, bias) {
+@@ -2918,7 +2931,7 @@
+     var anchor = elt("span", "xxxxxxxxxx");
+     var pre = elt("pre", [anchor], "CodeMirror-line-like");
+     removeChildrenAndAdd(display.measure, pre);
+-    var rect = anchor.getBoundingClientRect(), width = (rect.right - rect.left) / 10;
++    var rect = anchor.getBoundingClientRect(), width = (rect.right - rect.left) / (10 * coordinateScale(display));
+     if (width > 2) { display.cachedCharWidth = width; }
+     return width || 10
+   }
+@@ -2944,7 +2957,7 @@
+   // but using getBoundingClientRect to get a sub-pixel-accurate
+   // result.
+   function compensateForHScroll(display) {
+-    return display.scroller.getBoundingClientRect().left - display.sizer.getBoundingClientRect().left
++    return (display.scroller.getBoundingClientRect().left - display.sizer.getBoundingClientRect().left) / coordinateScale(display)
+   }
+ 
+   // Returns a function that estimates the height of a line, to use as
+@@ -2987,7 +3000,10 @@
+ 
+     var x, y, space = display.lineSpace.getBoundingClientRect();
+     // Fails unpredictably on IE[67] when mouse is dragged around quickly.
+-    try { x = e.clientX - space.left; y = e.clientY - space.top; }
++    try {
++      var scale = coordinateScale(display);
++      x = (e.clientX - space.left) / scale; y = (e.clientY - space.top) / scale;
++    }
+     catch (e$1) { return null }
+     var coords = coordsChar(cm, x, y), line;
+     if (forRect && coords.xRel > 0 && (line = getLine(cm.doc, coords.line).text).length == coords.ch) {
+@@ -3374,6 +3390,7 @@
+   // stored heights to match.
+   function updateHeightsInViewport(cm) {
+     var display = cm.display;
++    var scale = coordinateScale(display);
+     var prevBottom = display.lineDiv.offsetTop;
+     var viewTop = Math.max(0, display.scroller.getBoundingClientRect().top);
+     var oldHeight = display.lineDiv.getBoundingClientRect().top;
+@@ -3382,18 +3399,18 @@
+       var cur = display.view[i], wrapping = cm.options.lineWrapping;
+       var height = (void 0), width = 0;
+       if (cur.hidden) { continue }
+-      oldHeight += cur.line.height;
++      oldHeight += cur.line.height * scale;
+       if (ie && ie_version < 8) {
+         var bot = cur.node.offsetTop + cur.node.offsetHeight;
+         height = bot - prevBottom;
+         prevBottom = bot;
+       } else {
+         var box = cur.node.getBoundingClientRect();
+-        height = box.bottom - box.top;
++        height = (box.bottom - box.top) / scale;
+         // Check that lines don't extend past the right of the current
+         // editor width
+         if (!wrapping && cur.text.firstChild)
+-          { width = cur.text.firstChild.getBoundingClientRect().right - box.left - 1; }
++          { width = (cur.text.firstChild.getBoundingClientRect().right - box.left) / scale - 1; }
+       }
+       var diff = cur.line.height - height;
+       if (diff > .005 || diff < -.005) {
+@@ -3456,9 +3473,10 @@
+     if (signalDOMEvent(cm, "scrollCursorIntoView")) { return }
+ 
+     var display = cm.display, box = display.sizer.getBoundingClientRect(), doScroll = null;
++    var scale = coordinateScale(display);
+     var doc = display.wrapper.ownerDocument;
+-    if (rect.top + box.top < 0) { doScroll = true; }
+-    else if (rect.bottom + box.top > (doc.defaultView.innerHeight || doc.documentElement.clientHeight)) { doScroll = false; }
++    if (rect.top * scale + box.top < 0) { doScroll = true; }
++    else if (rect.bottom * scale + box.top > (doc.defaultView.innerHeight || doc.documentElement.clientHeight)) { doScroll = false; }
+     if (doScroll != null && !phantom) {
+       var scrollNode = elt("div", "\u200b", null, ("position: absolute;\n                         top: " + (rect.top - display.viewOffset - paddingTop(cm.display)) + "px;\n                         height: " + (rect.bottom - rect.top + scrollGap(cm) + display.barHeight) + "px;\n                         left: " + (rect.left) + "px; width: " + (Math.max(2, rect.right - rect.left)) + "px;"));
+       cm.display.lineSpace.appendChild(scrollNode);
+@@ -7693,7 +7711,7 @@
+     var lineBox = display.lineDiv.getBoundingClientRect();
+ 
+     if (mY > lineBox.bottom || !hasHandler(cm, type)) { return e_defaultPrevented(e) }
+-    mY -= lineBox.top - display.viewOffset;
++    mY = (mY - lineBox.top) / coordinateScale(display) + display.viewOffset;
+ 
+     for (var i = 0; i < cm.display.gutterSpecs.length; ++i) {
+       var g = display.gutters.childNodes[i];
+@@ -8477,8 +8495,9 @@
+         } else {
+           lineObj = line;
+         }
++        var scale = !mode || mode == "page" || mode == "window" ? coordinateScale(this.display) : 1;
+         return intoCoordSystem(this, lineObj, {top: 0, left: 0}, mode || "page", includeWidgets || end).top +
+-          (end ? this.doc.height - heightAtLine(lineObj) : 0)
++          (end ? (this.doc.height - heightAtLine(lineObj)) * scale : 0)
+       },
+ 
+       defaultTextHeight: function() { return textHeight(this.display) },
+@@ -9493,10 +9512,11 @@
+     if (cm.options.moveInputWithCursor) {
+       var headPos = cursorCoords(cm, doc.sel.primary().head, "div");
+       var wrapOff = display.wrapper.getBoundingClientRect(), lineOff = display.lineDiv.getBoundingClientRect();
++      var scale = coordinateScale(display);
+       result.teTop = Math.max(0, Math.min(display.wrapper.clientHeight - 10,
+-                                          headPos.top + lineOff.top - wrapOff.top));
++                                          headPos.top + (lineOff.top - wrapOff.top) / scale));
+       result.teLeft = Math.max(0, Math.min(display.wrapper.clientWidth - 10,
+-                                           headPos.left + lineOff.left - wrapOff.left));
++                                           headPos.left + (lineOff.left - wrapOff.left) / scale));
+     }
+ 
+     return result
