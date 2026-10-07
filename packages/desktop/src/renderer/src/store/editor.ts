@@ -28,7 +28,6 @@ import type {
   FileWordCount,
   LineEnding,
   MarkdownDocument,
-  PageOptions,
   TabOptions
 } from '@shared/types/files'
 
@@ -86,7 +85,6 @@ interface FormatLinkClickPayload {
 interface ExportPayload {
   type: string
   content?: string
-  pageOptions?: PageOptions
 }
 
 interface AutoSavePayload {
@@ -1635,7 +1633,7 @@ export const useEditorStore = defineStore('editor', {
       )
     },
 
-    EXPORT({ type, content, pageOptions }: ExportPayload): void {
+    EXPORT({ type, content }: ExportPayload): void {
       if (this.currentFile === null) return
 
       const { filename, pathname } = this.currentFile
@@ -1644,8 +1642,7 @@ export const useEditorStore = defineStore('editor', {
         title: this.documentTitle,
         content: content ?? '',
         filename,
-        pathname,
-        pageOptions: pageOptions ?? {}
+        pathname
       })
     },
 
@@ -1689,16 +1686,6 @@ export const useEditorStore = defineStore('editor', {
           })
           // Dismissing the notice rejects; declining to reveal is not a failure.
           .catch(() => {})
-      })
-    },
-
-    PRINT_RESPONSE(): void {
-      window.electron.ipcRenderer.send('mt::response-print')
-    },
-
-    LISTEN_FOR_PRINT_SERVICE_CLEARUP(): void {
-      window.electron.ipcRenderer.on('mt::print-service-clearup', () => {
-        bus.emit('print-service-clearup')
       })
     },
 

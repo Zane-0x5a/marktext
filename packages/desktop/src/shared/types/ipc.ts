@@ -22,7 +22,6 @@ import type {
   MarkdownDocument,
   TabOptions,
   BootstrapEditorConfig,
-  PageOptions,
   ExportType,
   SaveOptions,
   SerializedStat,
@@ -33,6 +32,7 @@ import type {
 } from './files'
 import type { BufferedState as BufferedStateType } from './bufferedState'
 import type { MenuTemplate, MenuPopupPosition } from './menu'
+import type { PrintLayout, PrintSnapshot, PrintDevice, PrintPage, PrintOutcome } from './print'
 
 export interface SaveDialogRequest {
   title?: string
@@ -49,6 +49,16 @@ export type PlantumlFetchResult =
 // =================================================================
 
 export interface IpcInvokeChannels {
+  'mt::print-preview::open': { args: []; ret: string }
+  'mt::print-preview::render': { args: [id: string, html: string, layout: PrintLayout]; ret: PrintSnapshot }
+  'mt::print-preview::printers': { args: []; ret: PrintDevice[] }
+  'mt::print-preview::page': { args: [id: string, revision: number, page: PrintPage]; ret: void }
+  'mt::print-preview::save': { args: [id: string, revision: number, title: string]; ret: PrintOutcome }
+  'mt::print-preview::print': {
+    args: [id: string, revision: number, deviceName: string, copies: number, count: number]
+    ret: PrintOutcome
+  }
+  'mt::print-preview::close': { args: [id: string]; ret: void }
   'mt::ask-for-image-path': { args: []; ret: string[] }
   'mt::boot-info-async': { args: []; ret: BootInfo }
   'mt::clipboard::guess-file-path': { args: []; ret: string | null }
@@ -158,7 +168,6 @@ export interface IpcSendChannels {
       content: string
       filename: string
       pathname: string
-      pageOptions: PageOptions
     }
   ]
   'mt::response-file-move-to': [payload: { id: string; pathname: string }]
@@ -179,7 +188,6 @@ export interface IpcSendChannels {
     defaultPath: string
   ]
   'mt::response-pandoc-export': [payload: PandocExportPayload]
-  'mt::response-print': []
   'mt::rg::cancel': [searchId: string]
   'mt::save-and-close-tabs': [tabs: unknown[]]
   'mt::save-tabs': [tabs: unknown[]]
@@ -273,7 +281,6 @@ export interface IpcMainEventChannels {
     selected?: boolean
   ]
   'mt::pandoc-not-exists': [opts: Record<string, unknown>]
-  'mt::print-service-clearup': []
   'mt::rg::cancelled': [payload: unknown]
   'mt::rg::done': [payload: unknown]
   'mt::rg::error': [payload: unknown]

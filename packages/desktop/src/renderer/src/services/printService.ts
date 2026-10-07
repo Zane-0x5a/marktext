@@ -1,50 +1,53 @@
-import { resolveLocalImageSrc } from '../util/resolveImageSrc'
+import printCss from '../assets/styles/printService.css?inline'
+import { PAPER_SIZES, validatePrintLayout, type PrintLayout } from '@shared/types/print'
 
-class MarkdownPrint {
-  private container: HTMLElement | null = null
-
-  /**
-   * Prepare document export and append a hidden print container to the window.
-   * Everything outside of this hidden print container will be hidden with display: none.
-   *
-   * @param html HTML string
-   * @param renderStatic Render for static files like PDF documents
-   * @param dir Text direction to mirror onto the container. `innerHTML` drops
-   *   the exporter's outer `<html dir=…>` shell and the container is a sibling
-   *   of `.editor-wrapper`, so RTL documents print LTR unless we set it here
-   *   (#4833). LTR is the default and stays implicit.
-   */
-  renderMarkdown(html: string, renderStatic?: boolean, dir?: string): void {
-    this.clearup()
-    const printContainer = document.createElement('article')
-    printContainer.classList.add('print-container')
-    if (dir === 'rtl' || dir === 'auto') {
-      printContainer.setAttribute('dir', dir)
-    }
-    this.container = printContainer
-    printContainer.innerHTML = html
-
-    // Fix images when rendering for static files like PDF (GH#678).
-    if (renderStatic) {
-      // Traverse through the DOM tree and fix all relative image sources.
-      const images = printContainer.getElementsByTagName('img')
-      for (const image of Array.from(images)) {
-        const rawSrc = image.getAttribute('src') ?? ''
-        image.src = resolveLocalImageSrc(rawSrc)
-      }
-    }
-
-    document.body.appendChild(printContainer)
-  }
-
-  /**
-   * Remove the print container from the window.
-   */
-  clearup(): void {
-    if (this.container) {
-      this.container.remove()
-    }
-  }
+export interface PreviewRequest {
+  options: Record<string, unknown>
+  resolve: (html: string) => void
+  reject: (error: unknown) => void
 }
 
-export default MarkdownPrint
+export const getPrintLayout = (options: Record<string, unknown>): PrintLayout => {
+  const paper = PAPER_SIZES[options.pageSize as keyof typeof PAPER_SIZES]
+  const size = paper || [Number(options.pageSizeWidth), Number(options.pageSizeHeight)]
+  const [width, height] = options.isLandscape ? [size[1], size[0]] : size
+  const layout = {
+    width,
+    height,
+    top: Number(options.pageMarginTop),
+    right: Number(options.pageMarginRight),
+    bottom: Number(options.pageMarginBottom),
+    left: Number(options.pageMarginLeft)
+  }
+  validatePrintLayout(layout)
+  return layout
+}
+
+/** Standalone print document; no editor transform, zoom, or UI styles travel with it. */
+export const preparePrintDocument = (html: string, layout: PrintLayout): string => {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const body = doc.createElement('article')
+  body.className = 'print-container'
+  body.innerHTML = doc.body.innerHTML
+  doc.body.replaceChildren(body)
+  const style = doc.createElement('style')
+  style.textContent = `${printCss}\n@media print {
+    @page { size: ${layout.width}mm ${layout.height}mm;
+      margin: ${layout.top}mm ${layout.right}mm ${layout.bottom}mm ${layout.left}mm; }
+    body .print-container { height: auto; }
+    html, body { margin: 0 !important; padding: 0 !important; }
+    body article.markdown-body { width: 100%; max-width: none; min-width: 0; padding: 0; }
+    .page-container > tbody > tr > td { width: 100%; }
+    .markdown-body table { width: 100%; table-layout: fixed; }
+    .markdown-body tr, .markdown-body img { break-inside: avoid; }
+    .markdown-body img, .markdown-body svg { max-width: 100%; height: auto; }
+  }`
+  doc.head.appendChild(style)
+  for (const script of doc.querySelectorAll('script')) script.remove()
+  for (const element of doc.querySelectorAll('*')) {
+    for (const attribute of element.attributes) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name)
+    }
+  }
+  return '<!doctype html>\n' + doc.documentElement.outerHTML
+}

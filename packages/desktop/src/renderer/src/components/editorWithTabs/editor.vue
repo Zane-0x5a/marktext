@@ -107,7 +107,7 @@ import MediaViewer from '../mediaViewer/index.vue'
 import bus from '@/bus'
 import { DEFAULT_EDITOR_FONT_FAMILY, DEFAULT_CODE_FONT_FAMILY } from '@/config'
 import notice from '@/services/notification'
-import Printer from '@/services/printService'
+import { getPrintLayout, preparePrintDocument, type PreviewRequest } from '@/services/printService'
 import { SpellcheckerLanguageCommand } from '@/commands'
 import { SpellChecker } from '@/spellchecker'
 import { isMac, animatedScrollTo } from '@/util'
@@ -264,7 +264,6 @@ const viewerOpen = ref(false)
 const rowInput = ref<InputNumberInstance | null>(null)
 
 // Non-reactive variables
-let printer: Printer | null = null
 let spellchecker: SpellChecker | null = null
 let switchLanguageCommand: SpellcheckerLanguageCommand | null = null
 // The engine has no `scroll` event; we listen on the scroll container directly.
@@ -1289,9 +1288,36 @@ interface ExportOptions {
   [key: string]: unknown
 }
 
+const generatePrintHtml = async (opts: ExportOptions): Promise<string> => {
+  const muya = editor.value
+  if (!muya) throw new Error('No document is open')
+  const layout = getPrintLayout(opts)
+  const extraCss = await getCssForOptions(opts as PdfCssOptions)
+  const html = await exportStyledHTML(muya, muya.getMarkdown(), {
+    title: '',
+    printOptimization: true,
+    extraCss,
+    toc: getHtmlToc(muya.getTOC(), opts as HtmlTocOptions),
+    header: (opts.header ?? null) as HeaderFooterPart | null,
+    footer: (opts.footer ?? null) as HeaderFooterPart | null,
+    headerFooterStyled: opts.headerFooterStyled as boolean | undefined,
+    dir: props.textDirection
+  })
+  return preparePrintDocument(html, layout)
+}
+
+const handlePreparePrintPreview = async (payload: unknown) => {
+  const request = payload as PreviewRequest
+  try {
+    request.resolve(await generatePrintHtml(request.options as ExportOptions))
+  } catch (error) {
+    request.reject(error)
+  }
+}
+
 const handleExport = async (options: unknown) => {
   const opts = options as ExportOptions
-  const { type, headerFooterStyled, htmlTitle } = opts
+  const { type, htmlTitle } = opts
 
   if (!/^pdf|print|styledHtml$/.test(type)) {
     throw new Error(`Invalid type to export: "${type}".`)
@@ -1303,8 +1329,6 @@ const handleExport = async (options: unknown) => {
   const extraCss = await getCssForOptions(opts as unknown as PdfCssOptions)
   const htmlToc = getHtmlToc(muya.getTOC(), opts as unknown as HtmlTocOptions)
   const markdown = muya.getMarkdown()
-  const header = (opts.header ?? null) as HeaderFooterPart | null
-  const footer = (opts.footer ?? null) as HeaderFooterPart | null
 
   switch (type) {
     case 'styledHtml': {
@@ -1329,28 +1353,9 @@ const handleExport = async (options: unknown) => {
       break
     }
     case 'pdf': {
-      // NOTE: We need to set page size via Electron.
       try {
-        const { pageSize, pageSizeWidth, pageSizeHeight, isLandscape } = opts
-        const pageOptions = {
-          pageSize,
-          pageSizeWidth,
-          pageSizeHeight,
-          isLandscape
-        }
-
-        const html = await exportStyledHTML(muya, markdown, {
-          title: '',
-          printOptimization: true,
-          extraCss,
-          toc: htmlToc,
-          header,
-          footer,
-          headerFooterStyled: headerFooterStyled as boolean | undefined,
-          dir: props.textDirection
-        })
-        printer!.renderMarkdown(html, true, props.textDirection)
-        editorStore.EXPORT({ type, pageOptions })
+        const content = await generatePrintHtml(opts)
+        editorStore.EXPORT({ type, content })
       } catch (err) {
         log.error('Failed to export document:', err)
         notice.notify({
@@ -1358,41 +1363,14 @@ const handleExport = async (options: unknown) => {
           type: 'error',
           message: t('editor.export.errorExporting', { type: htmlTitle || 'PDF' })
         })
-        handlePrintServiceClearup()
       }
       break
     }
     case 'print': {
-      // NOTE: Print doesn't support page size or orientation.
-      try {
-        const html = await exportStyledHTML(muya, markdown, {
-          title: '',
-          printOptimization: true,
-          extraCss,
-          toc: htmlToc,
-          header,
-          footer,
-          headerFooterStyled: headerFooterStyled as boolean | undefined,
-          dir: props.textDirection
-        })
-        printer!.renderMarkdown(html, true, props.textDirection)
-        editorStore.PRINT_RESPONSE()
-      } catch (err) {
-        log.error('Failed to export document:', err)
-        notice.notify({
-          title: t('editor.print.failed'),
-          type: 'error',
-          message: t('editor.print.error', { title: htmlTitle || '' })
-        })
-        handlePrintServiceClearup()
-      }
+      bus.emit('showExportDialog', 'print')
       break
     }
   }
-}
-
-const handlePrintServiceClearup = () => {
-  printer!.clearup()
 }
 
 // Push the current selection to the application-menu / toolbar state. Called on
@@ -1720,7 +1698,6 @@ const handleLanguageChanged = (newLocale?: unknown) => {
 const resizeObserverForEditor = new ResizeObserver(handleResetPaddingBottom)
 
 onMounted(() => {
-  printer = new Printer()
   const ele = editorRef.value
   if (!ele) return
 
@@ -1861,7 +1838,7 @@ onMounted(() => {
   bus.on('redo', handleRedo)
   bus.on('selectAll', handleSelectAll)
   bus.on('export', handleExport)
-  bus.on('print-service-clearup', handlePrintServiceClearup)
+  bus.on('prepare-print-preview', handlePreparePrintPreview)
   bus.on('paragraph', handleEditParagraph)
   bus.on('format', handleInlineFormat)
   bus.on('searchValue', handleSearch)
@@ -2025,7 +2002,7 @@ onBeforeUnmount(() => {
   bus.off('redo', handleRedo)
   bus.off('selectAll', handleSelectAll)
   bus.off('export', handleExport)
-  bus.off('print-service-clearup', handlePrintServiceClearup)
+  bus.off('prepare-print-preview', handlePreparePrintPreview)
   bus.off('paragraph', handleEditParagraph)
   bus.off('format', handleInlineFormat)
   bus.off('searchValue', handleSearch)

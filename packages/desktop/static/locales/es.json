@@ -1001,5 +1001,32 @@
       "switchError": "Error del corrector ortográfico para {languageCode}, {error}",
       "title": "Corrector ortográfico"
     }
+  },
+  "printPreview": {
+    "title": "Print preview",
+    "previous": "Previous page",
+    "next": "Next page",
+    "page": "Page",
+    "pageLabel": "Preview of page {page}",
+    "zoom": "Preview zoom",
+    "fit": "Fit page",
+    "generating": "Generating pages…",
+    "totalPages": "{count} pages",
+    "failed": "Preview could not be generated",
+    "retry": "Try again",
+    "printer": "Printer",
+    "noPrinter": "No printer available",
+    "copies": "Copies",
+    "refreshPrinters": "Refresh printers",
+    "cancel": "Cancel",
+    "savePdf": "Save PDF",
+    "print": "Print",
+    "preparing": "Preparing {page}/{count}…",
+    "printing": "Sending to printer…",
+    "canceled": "Printing canceled. You can try again.",
+    "saved": "PDF saved.",
+    "sent": "Pages sent to the printer.",
+    "invalidLayout": "Check the paper dimensions and margins. Leave at least 20 mm for content.",
+    "note": "Prints these pages at 300 dpi, using the selected paper size. Match the loaded paper; printer hardware may clip the outer edges."
   }
 }

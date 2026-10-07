@@ -2,293 +2,330 @@
   <div class="print-settings-dialog">
     <el-dialog
       v-model="showExportSettingsDialog"
-      :show-close="false"
+      :show-close="isPrintPreview"
       :modal="true"
-      custom-class="ag-dialog-table"
-      width="500px"
+      :class="{ 'print-preview-dialog': isPrintPreview }"
+      :width="isPrintPreview ? 'min(1120px, calc(100vw - 48px))' : '500px'"
+      :close-on-click-modal="!isPrintPreview"
+      :before-close="beforeClose"
+      @closed="previewBusy = false"
     >
-      <h3>{{ t('exportSettings.title') }}</h3>
-      <el-tabs v-model="activeName">
-        <el-tab-pane
-          :label="t('exportSettings.info.label')"
-          name="info"
+      <h3>{{ t(isPrintPreview ? 'printPreview.title' : 'exportSettings.title') }}</h3>
+      <p
+        v-if="isPrintPreview"
+        class="preview-document-name"
+      >
+        {{ documentTitle }}
+      </p>
+      <div :class="{ 'print-preview-layout': isPrintPreview }">
+        <div
+          class="export-options"
+          :inert="previewBusy"
         >
-          <span class="text">{{ t('exportSettings.info.description') }}</span>
-        </el-tab-pane>
-        <el-tab-pane
-          :label="t('exportSettings.page.label')"
-          name="page"
-        >
-          <!-- HTML -->
-          <div v-if="!isPrintable">
-            <text-box
-              :description="t('exportSettings.page.pageTitle')"
-              :input="htmlTitle"
-              :emit-time="0"
-              :on-change="(value: unknown) => onSelectChange('htmlTitle', value)"
-            />
-          </div>
-
-          <!-- PDF/Print -->
-          <div v-if="isPrintable">
-            <div v-if="exportType === 'pdf'">
-              <cur-select
-                class="page-size-select"
-                :description="t('exportSettings.page.pageSize')"
-                :value="pageSize"
-                :options="pageSizeList"
-                :on-change="(value: unknown) => onSelectChange('pageSize', value)"
-              />
-              <div
-                v-if="pageSize === 'custom'"
-                class="row"
-              >
-                <div>{{ t('exportSettings.page.widthHeight') }}</div>
-                <el-input-number
-                  v-model="pageSizeWidth"
-                  size="mini"
-                  controls-position="right"
-                  :min="100"
-                />
-                <el-input-number
-                  v-model="pageSizeHeight"
-                  size="mini"
-                  controls-position="right"
-                  :min="100"
+          <el-tabs v-model="activeName">
+            <el-tab-pane
+              :label="t('exportSettings.info.label')"
+              name="info"
+            >
+              <span class="text">{{ t('exportSettings.info.description') }}</span>
+            </el-tab-pane>
+            <el-tab-pane
+              :label="t('exportSettings.page.label')"
+              name="page"
+            >
+              <!-- HTML -->
+              <div v-if="!isPrintable">
+                <text-box
+                  :description="t('exportSettings.page.pageTitle')"
+                  :input="htmlTitle"
+                  :emit-time="0"
+                  :on-change="(value: unknown) => onSelectChange('htmlTitle', value)"
                 />
               </div>
+
+              <!-- PDF/Print -->
+              <div v-if="isPrintable">
+                <div>
+                  <cur-select
+                    class="page-size-select"
+                    :description="t('exportSettings.page.pageSize')"
+                    :value="pageSize"
+                    :options="pageSizeList"
+                    :on-change="(value: unknown) => onSelectChange('pageSize', value)"
+                  />
+                  <div
+                    v-if="pageSize === 'custom'"
+                    class="row"
+                  >
+                    <div>{{ t('exportSettings.page.widthHeight') }}</div>
+                    <el-input-number
+                      v-model="pageSizeWidth"
+                      size="mini"
+                      controls-position="right"
+                      :min="100"
+                      :max="1000"
+                    />
+                    <el-input-number
+                      v-model="pageSizeHeight"
+                      size="mini"
+                      controls-position="right"
+                      :min="100"
+                      :max="1000"
+                    />
+                  </div>
+
+                  <bool
+                    :description="t('exportSettings.page.landscapeOrientation')"
+                    :bool="isLandscape"
+                    :on-change="(value: unknown) => onSelectChange('isLandscape', value)"
+                  />
+                </div>
+
+                <div class="row">
+                  <div class="description">
+                    {{ t('exportSettings.page.pageMargin') }}
+                  </div>
+                  <div>
+                    <div class="label">
+                      {{ t('exportSettings.page.topBottom') }}
+                    </div>
+                    <el-input-number
+                      v-model="pageMarginTop"
+                      size="mini"
+                      controls-position="right"
+                      :min="0"
+                      :max="100"
+                    />
+                    <el-input-number
+                      v-model="pageMarginBottom"
+                      size="mini"
+                      controls-position="right"
+                      :min="0"
+                      :max="100"
+                    />
+                  </div>
+                  <div>
+                    <div class="label">
+                      {{ t('exportSettings.page.leftRight') }}
+                    </div>
+                    <el-input-number
+                      v-model="pageMarginLeft"
+                      size="mini"
+                      controls-position="right"
+                      :min="0"
+                      :max="100"
+                    />
+                    <el-input-number
+                      v-model="pageMarginRight"
+                      size="mini"
+                      controls-position="right"
+                      :min="0"
+                      :max="100"
+                    />
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane
+              :label="t('exportSettings.style.label')"
+              name="style"
+            >
+              <bool
+                :description="t('exportSettings.style.overwriteThemeFont')"
+                :bool="fontSettingsOverwrite"
+                :on-change="(value: unknown) => onSelectChange('fontSettingsOverwrite', value)"
+              />
+              <div v-if="fontSettingsOverwrite">
+                <font-text-box
+                  :description="t('exportSettings.style.fontFamily')"
+                  :value="fontFamily"
+                  :on-change="(value: unknown) => onSelectChange('fontFamily', value)"
+                />
+                <range
+                  :description="t('exportSettings.style.fontSize')"
+                  :value="fontSize"
+                  :min="8"
+                  :max="32"
+                  unit="px"
+                  :step="1"
+                  :on-change="(value: unknown) => onSelectChange('fontSize', value)"
+                />
+                <range
+                  :description="t('exportSettings.style.lineHeight')"
+                  :value="lineHeight"
+                  :min="1.0"
+                  :max="2.0"
+                  :step="0.1"
+                  :on-change="(value: unknown) => onSelectChange('lineHeight', value)"
+                />
+              </div>
+              <bool
+                :description="t('exportSettings.autoNumberingHeadings')"
+                :bool="autoNumberingHeadings"
+                :on-change="(value: unknown) => onSelectChange('autoNumberingHeadings', value)"
+              />
+              <bool
+                :description="t('exportSettings.showFrontMatter')"
+                :bool="showFrontMatter"
+                :on-change="(value: unknown) => onSelectChange('showFrontMatter', value)"
+              />
+            </el-tab-pane>
+            <el-tab-pane
+              :label="t('exportSettings.theme.label')"
+              name="theme"
+            >
+              <div class="text">
+                {{ t('exportSettings.theme.description') }}
+              </div>
+              <cur-select
+                :description="t('exportSettings.theme.theme')"
+                more="https://marktext.me/docs/export-themes"
+                :value="theme"
+                :options="themeList"
+                :on-change="(value: unknown) => onSelectChange('theme', value)"
+              />
+            </el-tab-pane>
+            <el-tab-pane
+              v-if="isPrintable"
+              :label="t('exportSettings.headerFooter.label')"
+              name="header"
+            >
+              <div class="text">
+                {{ t('exportSettings.headerFooter.description') }}
+              </div>
+              <cur-select
+                :description="t('exportSettings.headerFooter.headerType')"
+                :value="headerType"
+                :options="headerFooterTypes"
+                :on-change="(value: unknown) => onSelectChange('headerType', value)"
+              />
+              <text-box
+                v-if="headerType === 2"
+                :description="t('exportSettings.headerFooter.leftHeaderText')"
+                :input="headerTextLeft"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('headerTextLeft', value)"
+              />
+              <text-box
+                v-if="headerType !== 0"
+                :description="t('exportSettings.headerFooter.mainHeaderText')"
+                :input="headerTextCenter"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('headerTextCenter', value)"
+              />
+              <text-box
+                v-if="headerType === 2"
+                :description="t('exportSettings.headerFooter.rightHeaderText')"
+                :input="headerTextRight"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('headerTextRight', value)"
+              />
+
+              <cur-select
+                :description="t('exportSettings.headerFooter.footerType')"
+                :value="footerType"
+                :options="headerFooterTypes"
+                :on-change="(value: unknown) => onSelectChange('footerType', value)"
+              />
+              <text-box
+                v-if="footerType === 2"
+                :description="t('exportSettings.headerFooter.leftFooterText')"
+                :input="footerTextLeft"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('footerTextLeft', value)"
+              />
+              <text-box
+                v-if="footerType !== 0"
+                :description="t('exportSettings.headerFooter.mainFooterText')"
+                :input="footerTextCenter"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('footerTextCenter', value)"
+              />
+              <text-box
+                v-if="footerType === 2"
+                :description="t('exportSettings.headerFooter.rightFooterText')"
+                :input="footerTextRight"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('footerTextRight', value)"
+              />
 
               <bool
-                :description="t('exportSettings.page.landscapeOrientation')"
-                :bool="isLandscape"
-                :on-change="(value: unknown) => onSelectChange('isLandscape', value)"
+                :description="t('exportSettings.headerFooter.customizeStyle')"
+                :bool="headerFooterCustomize"
+                :on-change="(value: unknown) => onSelectChange('headerFooterCustomize', value)"
               />
-            </div>
 
-            <div class="row">
-              <div class="description">
-                {{ t('exportSettings.page.pageMargin') }}
-              </div>
-              <div>
-                <div class="label">
-                  {{ t('exportSettings.page.topBottom') }}
-                </div>
-                <el-input-number
-                  v-model="pageMarginTop"
-                  size="mini"
-                  controls-position="right"
-                  :min="0"
-                  :max="100"
+              <div v-if="headerFooterCustomize">
+                <bool
+                  :description="t('exportSettings.headerFooter.allowStyled')"
+                  :bool="headerFooterStyled"
+                  :on-change="(value: unknown) => onSelectChange('headerFooterStyled', value)"
                 />
-                <el-input-number
-                  v-model="pageMarginBottom"
-                  size="mini"
-                  controls-position="right"
-                  :min="0"
-                  :max="100"
+                <range
+                  :description="t('exportSettings.headerFooter.fontSize')"
+                  :value="headerFooterFontSize"
+                  :min="8"
+                  :max="20"
+                  unit="px"
+                  :step="1"
+                  :on-change="(value: unknown) => onSelectChange('headerFooterFontSize', value)"
                 />
               </div>
-              <div>
-                <div class="label">
-                  {{ t('exportSettings.page.leftRight') }}
-                </div>
-                <el-input-number
-                  v-model="pageMarginLeft"
-                  size="mini"
-                  controls-position="right"
-                  :min="0"
-                  :max="100"
-                />
-                <el-input-number
-                  v-model="pageMarginRight"
-                  size="mini"
-                  controls-position="right"
-                  :min="0"
-                  :max="100"
-                />
-              </div>
-            </div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane
-          :label="t('exportSettings.style.label')"
-          name="style"
-        >
-          <bool
-            :description="t('exportSettings.style.overwriteThemeFont')"
-            :bool="fontSettingsOverwrite"
-            :on-change="(value: unknown) => onSelectChange('fontSettingsOverwrite', value)"
-          />
-          <div v-if="fontSettingsOverwrite">
-            <font-text-box
-              :description="t('exportSettings.style.fontFamily')"
-              :value="fontFamily"
-              :on-change="(value: unknown) => onSelectChange('fontFamily', value)"
-            />
-            <range
-              :description="t('exportSettings.style.fontSize')"
-              :value="fontSize"
-              :min="8"
-              :max="32"
-              unit="px"
-              :step="1"
-              :on-change="(value: unknown) => onSelectChange('fontSize', value)"
-            />
-            <range
-              :description="t('exportSettings.style.lineHeight')"
-              :value="lineHeight"
-              :min="1.0"
-              :max="2.0"
-              :step="0.1"
-              :on-change="(value: unknown) => onSelectChange('lineHeight', value)"
-            />
-          </div>
-          <bool
-            :description="t('exportSettings.autoNumberingHeadings')"
-            :bool="autoNumberingHeadings"
-            :on-change="(value: unknown) => onSelectChange('autoNumberingHeadings', value)"
-          />
-          <bool
-            :description="t('exportSettings.showFrontMatter')"
-            :bool="showFrontMatter"
-            :on-change="(value: unknown) => onSelectChange('showFrontMatter', value)"
-          />
-        </el-tab-pane>
-        <el-tab-pane
-          :label="t('exportSettings.theme.label')"
-          name="theme"
-        >
-          <div class="text">
-            {{ t('exportSettings.theme.description') }}
-          </div>
-          <cur-select
-            :description="t('exportSettings.theme.theme')"
-            more="https://marktext.me/docs/export-themes"
-            :value="theme"
-            :options="themeList"
-            :on-change="(value: unknown) => onSelectChange('theme', value)"
-          />
-        </el-tab-pane>
-        <el-tab-pane
-          v-if="isPrintable"
-          :label="t('exportSettings.headerFooter.label')"
-          name="header"
-        >
-          <div class="text">
-            {{ t('exportSettings.headerFooter.description') }}
-          </div>
-          <cur-select
-            :description="t('exportSettings.headerFooter.headerType')"
-            :value="headerType"
-            :options="headerFooterTypes"
-            :on-change="(value: unknown) => onSelectChange('headerType', value)"
-          />
-          <text-box
-            v-if="headerType === 2"
-            :description="t('exportSettings.headerFooter.leftHeaderText')"
-            :input="headerTextLeft"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('headerTextLeft', value)"
-          />
-          <text-box
-            v-if="headerType !== 0"
-            :description="t('exportSettings.headerFooter.mainHeaderText')"
-            :input="headerTextCenter"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('headerTextCenter', value)"
-          />
-          <text-box
-            v-if="headerType === 2"
-            :description="t('exportSettings.headerFooter.rightHeaderText')"
-            :input="headerTextRight"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('headerTextRight', value)"
-          />
+            </el-tab-pane>
 
-          <cur-select
-            :description="t('exportSettings.headerFooter.footerType')"
-            :value="footerType"
-            :options="headerFooterTypes"
-            :on-change="(value: unknown) => onSelectChange('footerType', value)"
-          />
-          <text-box
-            v-if="footerType === 2"
-            :description="t('exportSettings.headerFooter.leftFooterText')"
-            :input="footerTextLeft"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('footerTextLeft', value)"
-          />
-          <text-box
-            v-if="footerType !== 0"
-            :description="t('exportSettings.headerFooter.mainFooterText')"
-            :input="footerTextCenter"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('footerTextCenter', value)"
-          />
-          <text-box
-            v-if="footerType === 2"
-            :description="t('exportSettings.headerFooter.rightFooterText')"
-            :input="footerTextRight"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('footerTextRight', value)"
-          />
-
-          <bool
-            :description="t('exportSettings.headerFooter.customizeStyle')"
-            :bool="headerFooterCustomize"
-            :on-change="(value: unknown) => onSelectChange('headerFooterCustomize', value)"
-          />
-
-          <div v-if="headerFooterCustomize">
-            <bool
-              :description="t('exportSettings.headerFooter.allowStyled')"
-              :bool="headerFooterStyled"
-              :on-change="(value: unknown) => onSelectChange('headerFooterStyled', value)"
-            />
-            <range
-              :description="t('exportSettings.headerFooter.fontSize')"
-              :value="headerFooterFontSize"
-              :min="8"
-              :max="20"
-              unit="px"
-              :step="1"
-              :on-change="(value: unknown) => onSelectChange('headerFooterFontSize', value)"
-            />
+            <el-tab-pane
+              :label="t('exportSettings.toc.label')"
+              name="toc"
+            >
+              <bool
+                :description="t('exportSettings.toc.includeTopHeading')"
+                :detailed-description="t('exportSettings.toc.includeTopHeadingDetail')"
+                :bool="tocIncludeTopHeading"
+                :on-change="(value: unknown) => onSelectChange('tocIncludeTopHeading', value)"
+              />
+              <text-box
+                :description="t('exportSettings.toc.title')"
+                :input="tocTitle"
+                :emit-time="0"
+                :on-change="(value: unknown) => onSelectChange('tocTitle', value)"
+              />
+            </el-tab-pane>
+          </el-tabs>
+          <div
+            v-if="!isPrintPreview"
+            class="button-controlls"
+          >
+            <button
+              class="button-primary"
+              @click="handleClicked"
+            >
+              {{ t('exportSettings.export') }}
+            </button>
           </div>
-        </el-tab-pane>
-
-        <el-tab-pane
-          :label="t('exportSettings.toc.label')"
-          name="toc"
-        >
-          <bool
-            :description="t('exportSettings.toc.includeTopHeading')"
-            :detailed-description="t('exportSettings.toc.includeTopHeadingDetail')"
-            :bool="tocIncludeTopHeading"
-            :on-change="(value: unknown) => onSelectChange('tocIncludeTopHeading', value)"
-          />
-          <text-box
-            :description="t('exportSettings.toc.title')"
-            :input="tocTitle"
-            :emit-time="0"
-            :on-change="(value: unknown) => onSelectChange('tocTitle', value)"
-          />
-        </el-tab-pane>
-      </el-tabs>
-      <div class="button-controlls">
-        <button
-          class="button-primary"
-          @click="handleClicked"
-        >
-          {{ t('exportSettings.export') }}
-        </button>
+        </div>
+        <print-preview
+          v-if="isPrintPreview && showExportSettingsDialog"
+          :options="previewOptions"
+          :title="documentTitle"
+          @busy="previewBusy = $event"
+          @close="closePreview"
+          @printed="printComplete"
+        />
       </div>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, type Ref } from 'vue'
+import {
+  computed,
+  defineAsyncComponent,
+  ref,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+  type Ref
+} from 'vue'
 import bus from '../../bus'
 import { loadExportSettings, saveExportSettings } from './persistence'
 import Bool from '@/prefComponents/common/bool/index.vue'
@@ -298,10 +335,17 @@ import Range from '@/prefComponents/common/range/index.vue'
 import TextBox from '@/prefComponents/common/textBox/index.vue'
 import { getPageSizeList, getHeaderFooterTypes, getExportThemeList } from './exportOptions'
 import { useI18n } from 'vue-i18n'
+import { useEditorStore } from '@/store/editor'
+import notice from '@/services/notification'
 
 const { t } = useI18n()
+const PrintPreview = defineAsyncComponent(() => import('@/components/printPreview/index.vue'))
 
 const exportType = ref('')
+const isPrintPreview = computed(() => exportType.value === 'print')
+const previewBusy = ref(false)
+const documentTitle = ref('')
+const editorStore = useEditorStore()
 const themesLoaded = ref(false)
 const isPrintable = ref(true)
 const showExportSettingsDialog = ref(false)
@@ -406,8 +450,11 @@ const updateTranslations = () => {
 }
 
 const showDialog = (type: unknown) => {
+  if (previewBusy.value) return
   const exportTypeValue = String(type ?? '')
   exportType.value = exportTypeValue
+  documentTitle.value = editorStore.currentFile?.filename || 'Untitled'
+  if (isPrintPreview.value) activeName.value = 'page'
   isPrintable.value = exportTypeValue !== 'styledHtml'
   if (!isPrintable.value && (activeName.value === 'header' || activeName.value === 'page')) {
     activeName.value = 'info'
@@ -422,7 +469,7 @@ const showDialog = (type: unknown) => {
   }
 }
 
-const handleClicked = () => {
+const buildOptions = () => {
   const options: Record<string, unknown> = {
     type: exportType.value,
     pageSize: pageSize.value,
@@ -481,8 +528,28 @@ const handleClicked = () => {
     })
   }
 
+  return options
+}
+
+const previewOptions = computed(buildOptions)
+const handleClicked = () => {
   showExportSettingsDialog.value = false
-  bus.emit('export', options)
+  bus.emit('export', buildOptions())
+}
+const beforeClose = (done: () => void) => {
+  if (!previewBusy.value) done()
+}
+const closePreview = () => {
+  showExportSettingsDialog.value = false
+}
+const printComplete = () => {
+  previewBusy.value = false
+  showExportSettingsDialog.value = false
+  notice.notify({
+    title: t('printPreview.title'),
+    type: 'primary',
+    message: t('printPreview.sent')
+  })
 }
 
 const onSelectChange = (key: string, value: unknown) => {
@@ -605,6 +672,77 @@ const loadThemesFromDisk = async () => {
 
 .print-settings-dialog .el-tabs__content::-webkit-scrollbar:vertical {
   width: 5px;
+}
+
+.print-preview-dialog {
+  margin-top: 24px;
+}
+.print-preview-dialog .el-dialog__body {
+  padding: 0 24px 24px;
+}
+.print-preview-dialog h3 {
+  margin: 0;
+  color: var(--editorColor);
+  font-size: 20px;
+  font-weight: 600;
+}
+.preview-document-name {
+  margin: 6px 0 20px;
+  color: var(--editorColor60);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.print-preview-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 28px;
+  height: calc(100vh - 180px);
+  max-height: 750px;
+  min-height: 400px;
+}
+.print-preview-layout .export-options {
+  min-width: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+.print-preview-layout .el-tabs__content {
+  max-height: none;
+}
+.print-preview-layout .row .el-input-number {
+  width: 124px;
+  margin-right: 8px;
+}
+.print-preview-layout .el-tabs__item {
+  font-size: 13px;
+  padding: 0 10px;
+}
+.print-preview-layout .pref-select-item .el-select {
+  width: 100%;
+}
+.print-preview-layout .pref-select-item {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+@media (max-width: 850px) {
+  .print-preview-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .print-preview-layout .row .el-input-number {
+    width: 108px;
+  }
+}
+@media (max-width: 700px) {
+  .print-preview-layout {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+  .print-preview-layout .export-options { max-height: 220px; }
+  .print-preview-layout .print-preview { height: 560px; }
 }
 
 .el-input-number {
