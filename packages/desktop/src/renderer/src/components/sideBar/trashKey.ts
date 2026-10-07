@@ -57,6 +57,12 @@ export const isPathWithinRoot = (
   separator: string
 ): boolean => {
   if (!rootPath) return false
+  // Pathe normalizes renderer roots to '/', while the main-process watcher
+  // can still supply Windows paths with backslashes.
+  if (/^[a-z]:[/\\]/i.test(rootPath) || rootPath.startsWith('\\\\')) {
+    pathname = pathname.replace(/\\/g, separator)
+    rootPath = rootPath.replace(/\\/g, separator)
+  }
   if (pathname === rootPath) return true
   const prefix = rootPath.endsWith(separator) ? rootPath : rootPath + separator
   return pathname.startsWith(prefix)

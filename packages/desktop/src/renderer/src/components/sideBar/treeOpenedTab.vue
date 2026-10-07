@@ -2,13 +2,17 @@
   <div
     class="opened-file"
     :title="file.pathname"
+    :draggable="!!file.pathname"
     :class="[{ active: currentFile?.id === file.id, unsaved: !file.isSaved }]"
     @click="selectFile(file)"
+    @dragstart.prevent.stop="handleFileDragStart"
   >
     <el-icon
       class="close-icon"
       :size="10"
       @click.stop="removeFileInTab(file)"
+      @mousedown.stop.prevent
+      @dragstart.prevent.stop
     >
       <Close />
     </el-icon>
@@ -22,13 +26,19 @@ import { useEditorStore } from '@/store/editor'
 import { Close } from '@element-plus/icons-vue'
 import type { TabDescriptor } from './types'
 
-defineProps<{
+const props = defineProps<{
   file: TabDescriptor
 }>()
 
 const editorStore = useEditorStore()
 
 const { currentFile } = storeToRefs(editorStore)
+
+const handleFileDragStart = (): void => {
+  if (!props.file.pathname) return
+  // A named buffer exports the version on disk, just like dragging from Explorer.
+  window.electron.ipcRenderer.send('mt::start-file-drag', props.file.pathname)
+}
 
 const selectFile = (file: TabDescriptor): void => {
   if (file.id !== currentFile.value?.id) {
