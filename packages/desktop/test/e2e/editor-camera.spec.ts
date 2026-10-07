@@ -71,7 +71,7 @@ test.describe('Document camera pinch', () => {
   test.beforeEach(async() => {
     const launched = await launchWithMarkdown(markdown, {
       suppressErrorDialog: true,
-      preferences: { showTabBar: true, spellcheckerEnabled: false }
+      preferences: { tabBarVisibility: true, sideBarVisibility: true, spellcheckerEnabled: false }
     })
     app = launched.app
     page = launched.page
