@@ -196,6 +196,7 @@ export interface IpcSendChannels {
   'mt::set-user-preference': [partial: unknown]
   'mt::shell::open-external': [url: string]
   'mt::shell::show-item': [fullPath: string]
+  'mt::start-file-drag': [pathname: string]
   'mt::update-format-menu': [windowId: number, state: Record<string, boolean>]
   'mt::update-line-ending-menu': [windowId: number, lineEnding: LineEnding]
   'mt::update-sidebar-menu': [windowId: number, visible: boolean]

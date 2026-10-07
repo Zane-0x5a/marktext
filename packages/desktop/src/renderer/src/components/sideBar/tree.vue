@@ -272,11 +272,12 @@ const focusTree = (): void => {
   treeWrapper.value?.focus()
 }
 
-// preventDefault stops the browser's default mousedown focus move (to <body>)
-// from undoing the focus() call.
 const handleTreeMouseDown = (event: MouseEvent): void => {
   if (isEditableTarget(event.target)) return
-  if (event.button === 0) event.preventDefault()
+  // Draggable rows take focus themselves. Cancelling their mousedown also
+  // prevents Chromium from ever firing dragstart.
+  const draggableRow = (event.target as Element | null)?.closest('[draggable="true"]')
+  if (event.button === 0 && !draggableRow) event.preventDefault()
   focusTree()
 }
 
