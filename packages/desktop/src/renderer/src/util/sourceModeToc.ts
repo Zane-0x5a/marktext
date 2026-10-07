@@ -26,7 +26,8 @@ export function scrollSourceEditorToLine(
   editor.setCursor({ line, ch: 0 }, undefined, { scroll: false })
 
   if (!scrollContainer) return
-  const top = editor.heightAtLine(line, 'local')
+  const scale = Number(scrollContainer.dataset?.editorScale ?? 1)
+  const top = editor.heightAtLine(line, 'local') * scale
   scrollContainer.scrollTo({ top, behavior: 'smooth' })
 }
 

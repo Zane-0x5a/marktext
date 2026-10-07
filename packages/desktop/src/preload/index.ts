@@ -10,6 +10,10 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import pathe from 'pathe'
 
+// Native page pinch would magnify window chrome as well as the document.
+// Document cameras consume the gesture in the renderer instead.
+webFrame.setVisualZoomLevelLimits(1, 1)
+
 import type {
   IpcInvokeChannels,
   IpcSendChannels,

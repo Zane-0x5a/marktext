@@ -1,0 +1,16 @@
+.editor-camera-viewport {
+  scrollbar-gutter: stable;
+}
+
+.editor-camera-stage {
+  position: relative;
+  overflow: clip;
+}
+
+.editor-camera-plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flow-root;
+  transform-origin: top left;
+}
