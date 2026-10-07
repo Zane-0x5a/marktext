@@ -99,6 +99,7 @@ import {
   type ISerializedHistory
 } from '@muyajs/core'
 import { getMuyaLocale } from '@/util/muyaLocale'
+import { EditorCamera } from '@/util/editorCamera'
 import { exportStyledHTML, type HeaderFooterPart } from '@/util/exportHtml'
 import { applyCursor, isIndexCursor } from '@/util/cursor'
 import EditorSearch from '../search/index.vue'
@@ -268,6 +269,7 @@ let spellchecker: SpellChecker | null = null
 let switchLanguageCommand: SpellcheckerLanguageCommand | null = null
 // The engine has no `scroll` event; we listen on the scroll container directly.
 let scrollHandler: ((e: Event) => void) | null = null
+let camera: EditorCamera | null = null
 
 // The engine's undo/redo history (`getHistory()`) has a different shape than
 // the desktop store's `tab.history` (which drives the save/dirty tracking and
@@ -746,6 +748,8 @@ watch(spellcheckerLanguage, (value, oldValue) => {
   }
 })
 
+watch(() => currentFile.value?.id, () => camera?.reset(), { flush: 'sync' })
+
 watch(currentFile, (value, oldValue) => {
   if (value && value !== oldValue) {
     scrollToCursor(0)
@@ -1211,9 +1215,10 @@ const scrollToCords = (y: number) => {
 
   const maxScrollHeight = container.scrollHeight - container.clientHeight // max scroll height is actually calculated as such
   if (y > maxScrollHeight) {
-    const editorId = container.firstElementChild as HTMLElement | null
+    const editorId = container.querySelector<HTMLElement>('.mu-container')
     if (editorId) {
-      editorId.style.paddingBottom = `${y - maxScrollHeight + 100}px` // 100px is the default editor padding
+      editorId.style.paddingBottom = `${(y - maxScrollHeight) / (camera?.scale ?? 1) + 100}px` // 100px is the default editor padding
+      camera?.refresh()
       // attach a resize observer so we know when to remove the padding when it is of the "correct" height
       resizeObserverForEditor.observe(editorId)
     }
@@ -1620,10 +1625,11 @@ const handleFileChange = (payload: unknown) => {
     applyCursor(editor.value, newCursor)
   }
 
+  camera?.refresh()
   if (typeof scrollTop === 'number') {
     container.style.visibility = 'hidden'
     container.style.pointerEvents = 'none'
-    scrollToCords(scrollTop)
+    scrollToCords(scrollTop * (camera?.scale ?? 1))
   } else {
     container.style.visibility = 'visible'
     container.style.pointerEvents = 'auto'
@@ -1694,7 +1700,7 @@ const handleScreenShot = (filePath?: unknown) => {
 const handleResetPaddingBottom = () => {
   const container = getScrollContainer()
   if (!container) return
-  const firstChild = container.firstElementChild as HTMLElement | null
+  const firstChild = container.querySelector<HTMLElement>('.mu-container')
   if (!firstChild) return
   const newScollableHeightWithoutPadding =
     container.scrollHeight - container.clientHeight - parseFloat(firstChild.style.paddingBottom)
@@ -1831,6 +1837,8 @@ onMounted(() => {
   }
 
   const container = getScrollContainer()!
+  const documentNode = container.querySelector<HTMLElement>('.mu-container')!
+  camera = new EditorCamera(container, documentNode, () => editor.value?.hideAllFloatTools())
 
   // Listen for language changes and update the engine locale.
   bus.on('language-changed', handleLanguageChanged)
@@ -1916,7 +1924,7 @@ onMounted(() => {
   // so the desktop can persist each tab's scroll position.
   scrollHandler = () => {
     if (currentFile.value) {
-      editorStore.updateScrollPosition(currentFile.value.id, container.scrollTop)
+      editorStore.updateScrollPosition(currentFile.value.id, container.scrollTop / (camera?.scale ?? 1))
     }
   }
   container.addEventListener('scroll', scrollHandler, { passive: true })
@@ -2057,6 +2065,9 @@ onBeforeUnmount(() => {
   scrollHandler = null
 
   resizeObserverForEditor.disconnect()
+
+  camera?.destroy()
+  camera = null
 
   if (editor.value) {
     editor.value.destroy()

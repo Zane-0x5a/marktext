@@ -10,6 +10,7 @@ import { ref, shallowRef, markRaw, watch, onMounted, onBeforeUnmount, nextTick }
 import { useEditorStore } from '@/store/editor'
 import { usePreferencesStore } from '@/store/preferences'
 import { findMarkdownHeadingLine, scrollSourceEditorToLine } from '@/util/sourceModeToc'
+import { EditorCamera } from '@/util/editorCamera'
 import { storeToRefs } from 'pinia'
 import type CodeMirror from 'codemirror'
 import codeMirror, { setCursorAtFirstLine, setTextDirection } from '../../codeMirror'
@@ -49,6 +50,9 @@ const {
   texMathDoubleBackslash
 } = storeToRefs(preferencesStore)
 const { currentFile: currentTab } = storeToRefs(editorStore)
+let camera: EditorCamera | null = null
+
+watch(() => currentTab.value?.id, () => camera?.reset(), { flush: 'sync' })
 
 const isValidMuyaIndexCursor = (cursor: unknown): cursor is MuyaIndexCursorLike => {
   const c = cursor as MuyaIndexCursorLike | null | undefined
@@ -183,6 +187,7 @@ const handleFileChange = (payload: unknown) => {
 
   if (typeof newMarkdown === 'string') {
     editor.value.setValue(newMarkdown)
+    camera?.refresh()
   }
 
   // t('editor.sourceCode.cursorNullComment')
@@ -375,6 +380,7 @@ onMounted(() => {
 
   const { markdown, muyaIndexCursor, textDirection } = props
   const container = sourceCodeContainer.value
+  if (!container) return
   const codeMirrorConfig: Record<string, unknown> = {
     value: markdown,
     lineNumbers: sourceCodeLineNumbers.value,
@@ -418,6 +424,7 @@ onMounted(() => {
   }
 
   editor.value = codeMirrorInstance
+  camera = new EditorCamera(container, codeMirrorInstance.getWrapperElement())
   tabId.value = id
   updateSelectionWordCount(codeMirrorInstance)
 
@@ -425,6 +432,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  camera?.destroy()
+  camera = null
   viewDestroyed.value = true
   if (commitTimer.value) clearTimeout(commitTimer.value)
 
