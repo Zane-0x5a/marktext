@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 // The export wrapper reaches `window.path` / `window.DIRNAME` through the
 // preload bridge; stub them before the hoisted imports run (mirrors
@@ -15,7 +15,7 @@ vi.hoisted(() => {
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import MarkdownPrint from '@/services/printService'
+import { preparePrintDocument } from '@/services/printService'
 import { exportStyledHTML } from '@/util/exportHtml'
 
 // Read the stylesheet from disk: vitest runs with CSS processing off, so a
@@ -53,19 +53,21 @@ const printWrapSelectors = (css: string): string[] => {
 
 const renderPrintContainer = async(markdown: string): Promise<Element> => {
   const html = await exportStyledHTML(NO_MUYA, markdown, {})
-  const article = /<article class="markdown-body">[\s\S]*<\/article>/.exec(html)
-  expect(article).not.toBeNull()
-  new MarkdownPrint().renderMarkdown(article![0], true)
-  const code = document.querySelector('article.print-container pre code')
+  const printed = preparePrintDocument(html, {
+    width: 210,
+    height: 297,
+    top: 20,
+    right: 20,
+    bottom: 20,
+    left: 20
+  })
+  const doc = new DOMParser().parseFromString(printed, 'text/html')
+  const code = doc.querySelector('article.print-container pre code')
   expect(code).not.toBeNull()
   return code!
 }
 
 describe('PDF / print — long lines in code blocks wrap (#5307)', () => {
-  afterEach(() => {
-    document.body.querySelectorAll('article.print-container').forEach((n) => n.remove())
-  })
-
   it('wraps a fenced block with a language', async() => {
     const code = await renderPrintContainer(`\`\`\`bash\n${LONG_LINE}\n\`\`\``)
     expect(code.className).toContain('language-bash')

@@ -161,15 +161,6 @@ export interface BootstrapEditorConfig {
   [key: string]: unknown
 }
 
-export interface PageOptions {
-  pageSize?: string
-  pageSizeWidth?: number
-  pageSizeHeight?: number
-  isLandscape?: boolean
-  printBackground?: boolean
-  [key: string]: unknown
-}
-
 export type ExportType = 'pdf' | 'html' | 'styledHtml' | 'png' | 'jpeg'
 
 /** Current document handed to the main process for a pandoc export. */

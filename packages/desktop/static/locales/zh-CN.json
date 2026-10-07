@@ -1001,5 +1001,32 @@
       "languageMissing": "拼写检查语言缺失 {languageCode}",
       "switchError": "{languageCode} 拼写检查切换错误，{error}"
     }
+  },
+  "printPreview": {
+    "title": "打印预览",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "页码",
+    "pageLabel": "第 {page} 页预览",
+    "zoom": "预览缩放",
+    "fit": "适合整页",
+    "generating": "正在生成页面…",
+    "totalPages": "共 {count} 页",
+    "failed": "无法生成预览",
+    "retry": "重试",
+    "printer": "打印机",
+    "noPrinter": "没有可用打印机",
+    "copies": "份数",
+    "refreshPrinters": "刷新打印机",
+    "cancel": "取消",
+    "savePdf": "保存 PDF",
+    "print": "打印",
+    "preparing": "正在准备 {page}/{count}…",
+    "printing": "正在发送到打印机…",
+    "canceled": "已取消，可以重新打印。",
+    "saved": "PDF 已保存。",
+    "sent": "页面已发送到打印机。",
+    "invalidLayout": "请检查纸张尺寸和边距，至少留出 20 mm 内容区域。",
+    "note": "按所选纸张，以 300 dpi 打印这些页面。请装入相同尺寸的纸张；打印机硬件可能裁切纸张边缘。"
   }
 }

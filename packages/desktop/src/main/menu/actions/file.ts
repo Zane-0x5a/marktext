@@ -31,15 +31,9 @@ import pandoc, {
 } from '../../utils/pandoc'
 import { t, getCurrentLanguage } from '../../i18n'
 import type { PandocExportPayload, TabOptions, UnsavedFile } from '@shared/types/files'
+import { exportPrintPdf } from '../../print/preview'
 
 type Win = BrowserWindow | null | undefined
-
-interface PageOptions {
-  pageSize?: string
-  pageSizeWidth?: number
-  pageSizeHeight?: number
-  isLandscape?: boolean
-}
 
 // TODO(refactor): "save" and "save as" should be moved to the editor window (editor.js) and
 // the renderer should communicate only with the editor window for file relevant stuff.
@@ -66,29 +60,11 @@ const getExportExtensionFilter = (type: string): Electron.FileFilter[] | undefin
   return undefined
 }
 
-const getPdfPageOptions = (options?: PageOptions): Record<string, unknown> => {
-  if (!options) {
-    return {}
-  }
-
-  const { pageSize, pageSizeWidth, pageSizeHeight, isLandscape } = options
-  if (pageSize === 'custom' && pageSizeWidth && pageSizeHeight) {
-    return {
-      // Note: mm to microns
-      pageSize: { height: pageSizeHeight * 1000, width: pageSizeWidth * 1000 },
-      landscape: !!isLandscape
-    }
-  } else {
-    return { pageSize, landscape: !!isLandscape }
-  }
-}
-
 interface ExportPayload {
   type: string
   content?: string
   pathname?: string
   title?: string
-  pageOptions?: PageOptions
 }
 
 /** A title or heading can carry a slash, a basename what the OS refuses; empty is `Untitled`. */
@@ -97,7 +73,7 @@ const sanitizeFilename = (name?: string): string =>
 
 // Handle the export response from renderer process.
 const handleResponseForExport = async(e: IpcMainEvent, payload: ExportPayload): Promise<void> => {
-  const { type, content, pathname, title, pageOptions } = payload
+  const { type, content, pathname, title } = payload
   const win = BrowserWindow.fromWebContents(e.sender)
   if (!win) {
     return
@@ -115,18 +91,8 @@ const handleResponseForExport = async(e: IpcMainEvent, payload: ExportPayload): 
   if (filePath && !canceled) {
     try {
       if (type === 'pdf') {
-        // Build a clickable bookmark/outline tree from the document's h1-h6
-        // headings so exported PDFs have a navigation pane (#2989). The outline
-        // is derived from the tagged-PDF structure tree, so generateTaggedPDF is
-        // required — generateDocumentOutline alone produces no outline.
-        const options: Electron.PrintToPDFOptions = {
-          printBackground: true,
-          generateTaggedPDF: true,
-          generateDocumentOutline: true
-        }
-        Object.assign(options, getPdfPageOptions(pageOptions))
-        const data = await win.webContents.printToPDF(options)
-        removePrintServiceFromWindow(win)
+        if (!content) throw new Error('No print document found')
+        const data = await exportPrintPdf(content)
         await writeFile(filePath, data, extension!, 'binary')
       } else {
         if (!content) {
@@ -144,11 +110,6 @@ const handleResponseForExport = async(e: IpcMainEvent, payload: ExportPayload): 
         type: 'error',
         message: ERROR_MSG
       })
-    }
-  } else {
-    // User canceled save dialog
-    if (type === 'pdf') {
-      removePrintServiceFromWindow(win)
     }
   }
 }
@@ -266,16 +227,6 @@ const handlePandocExport = async(e: IpcMainEvent, payload: PandocExportPayload):
       message: summarizePandocWarnings(ERROR_MSG) || escapeNotificationText(ERROR_MSG)
     })
   }
-}
-
-const handleResponseForPrint = async(e: IpcMainEvent): Promise<void> => {
-  const win = BrowserWindow.fromWebContents(e.sender)
-  if (!win) {
-    return
-  }
-  win.webContents.print({ printBackground: true }, () => {
-    removePrintServiceFromWindow(win)
-  })
 }
 
 const handleResponseForSave = async(
@@ -396,11 +347,6 @@ const openPandocFile = async(windowId: number, pathname: string): Promise<void> 
   } catch (err) {
     log.error('Error while converting file:', err)
   }
-}
-
-const removePrintServiceFromWindow = (win: BrowserWindow): void => {
-  // remove print service content and restore GUI
-  win.webContents.send('mt::print-service-clearup')
 }
 
 // --- events -----------------------------------
@@ -583,8 +529,6 @@ ipcMain.on('mt::response-file-save', handleResponseForSave as Parameters<typeof 
 ipcMain.on('mt::response-export', handleResponseForExport as Parameters<typeof ipcMain.on>[1])
 
 ipcMain.on('mt::response-pandoc-export', handlePandocExport as Parameters<typeof ipcMain.on>[1])
-
-ipcMain.on('mt::response-print', handleResponseForPrint as Parameters<typeof ipcMain.on>[1])
 
 ipcMain.on('mt::window::drop', async(e, fileList: string[]) => {
   const win = BrowserWindow.fromWebContents(e.sender)

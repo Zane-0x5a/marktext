@@ -191,7 +191,6 @@ onMounted(async () => {
   editorStore.LISTEN_FOR_CLOSE_TAB()
   editorStore.LISTEN_FOR_TAB_CYCLE()
   editorStore.LISTEN_FOR_SWITCH_TABS()
-  editorStore.LISTEN_FOR_PRINT_SERVICE_CLEARUP()
   editorStore.LISTEN_FOR_EXPORT_SUCCESS()
   editorStore.LISTEN_FOR_FILE_CHANGE()
   editorStore.LISTEN_WINDOW_ZOOM()

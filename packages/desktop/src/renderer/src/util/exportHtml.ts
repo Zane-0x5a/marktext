@@ -135,9 +135,8 @@ const IMG_SRC_REG = /(<img\b[^>]*?\ssrc=")([^"]*)(")/gi
  * Rewrite relative / absolute-local `<img src>` to absolute `file://` URLs so a
  * saved styled-HTML document still resolves its images after it is moved out of
  * the source folder (legacy muyajs `correctImageSrc` parity, issue 230). Remote
- * URLs and `data:` URIs are left untouched. Idempotent: a `file://` src is left
- * as-is, so the PDF / print path (which rewrites again via printService) is a
- * no-op the second time.
+ * URLs and `data:` URIs are left untouched. The standalone PDF / print document
+ * uses the same absolute sources.
  */
 const rewriteImageSrcs = (html: string): string =>
   html.replace(IMG_SRC_REG, (match, pre: string, src: string, post: string) => {

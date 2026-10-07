@@ -10,6 +10,7 @@ import { registerCmdHandlers } from './cmd'
 import { registerI18nHandlers } from './i18n'
 import { registerDialogHandlers } from './dialog'
 import { registerDiagramHandlers } from './diagram'
+import { registerPrintPreviewHandlers } from '../print/preview'
 import { registerFileDragHandlers } from './fileDrag'
 
 export const registerSandboxIpcHandlers = (): void => {
@@ -25,5 +26,6 @@ export const registerSandboxIpcHandlers = (): void => {
   registerI18nHandlers()
   registerDialogHandlers()
   registerDiagramHandlers()
+  registerPrintPreviewHandlers()
   registerFileDragHandlers()
 }
