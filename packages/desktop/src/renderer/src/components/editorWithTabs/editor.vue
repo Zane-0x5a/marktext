@@ -114,7 +114,7 @@ import { isMac, animatedScrollTo } from '@/util'
 import { moveImageToFolder, uploadImage } from '@/util/fileSystem'
 import { guessClipboardFilePath } from '@/util/clipboard'
 import { dataURLToFile } from '@/util/dataURLToFile'
-import { getCssForOptions, getHtmlToc, type PdfCssOptions, type HtmlTocOptions } from '@/util/pdf'
+import { getCssForOptions, type PdfCssOptions, type HtmlTocOptions } from '@/util/pdf'
 import {
   getTocHeadingScrollTop,
   resolveTocHeadingElement,
@@ -1291,13 +1291,15 @@ interface ExportOptions {
 const generatePrintHtml = async (opts: ExportOptions): Promise<string> => {
   const muya = editor.value
   if (!muya) throw new Error('No document is open')
+  // Source edits belong to the tab until that mode exits; the hidden Muya is stale.
+  const markdown = sourceCode.value ? currentFile.value?.markdown ?? '' : muya.getMarkdown()
   const layout = getPrintLayout(opts)
   const extraCss = await getCssForOptions(opts as PdfCssOptions)
-  const html = await exportStyledHTML(muya, muya.getMarkdown(), {
+  const html = await exportStyledHTML(muya, markdown, {
     title: '',
     printOptimization: true,
     extraCss,
-    toc: getHtmlToc(muya.getTOC(), opts as HtmlTocOptions),
+    tocOptions: opts as HtmlTocOptions,
     header: (opts.header ?? null) as HeaderFooterPart | null,
     footer: (opts.footer ?? null) as HeaderFooterPart | null,
     headerFooterStyled: opts.headerFooterStyled as boolean | undefined,
@@ -1327,8 +1329,7 @@ const handleExport = async (options: unknown) => {
   if (!muya) return
 
   const extraCss = await getCssForOptions(opts as unknown as PdfCssOptions)
-  const htmlToc = getHtmlToc(muya.getTOC(), opts as unknown as HtmlTocOptions)
-  const markdown = muya.getMarkdown()
+  const markdown = sourceCode.value ? currentFile.value?.markdown ?? '' : muya.getMarkdown()
 
   switch (type) {
     case 'styledHtml': {
@@ -1337,7 +1338,7 @@ const handleExport = async (options: unknown) => {
           title: htmlTitle || '',
           printOptimization: false,
           extraCss,
-          toc: htmlToc,
+          tocOptions: opts as HtmlTocOptions,
           dir: props.textDirection
         })
         editorStore.EXPORT({ type, content })

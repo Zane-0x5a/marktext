@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import {
   validatePrintLayout,
+  PRINT_DPI,
   type PrintLayout,
   type PrintPage,
   type PrintOutcome
@@ -227,8 +228,8 @@ export const registerPrintPreviewHandlers = (): void => {
       ) {
         throw new Error('Invalid page image')
       }
-      const expectedWidth = Math.ceil((session.layout!.width / 25.4) * 300)
-      const expectedHeight = Math.ceil((session.layout!.height / 25.4) * 300)
+      const expectedWidth = Math.ceil((session.layout!.width / 25.4) * PRINT_DPI)
+      const expectedHeight = Math.ceil((session.layout!.height / 25.4) * PRINT_DPI)
       if (
         Math.abs(png.readUInt32BE(16) - expectedWidth) > 2 ||
         Math.abs(png.readUInt32BE(20) - expectedHeight) > 2

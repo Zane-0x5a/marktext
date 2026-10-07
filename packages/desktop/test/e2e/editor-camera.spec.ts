@@ -3,8 +3,10 @@ import type { ElectronApplication, Page } from 'playwright'
 import {
   enterSourceMode,
   exitSourceMode,
+  getMarkdownContent,
   expectNoRendererErrors,
-  launchWithMarkdown
+  launchWithMarkdown,
+  setSourceMarkdown
 } from './helpers'
 
 const paragraph = 'Fixed layout 中文排版 stays exactly the same while the camera moves. '.repeat(12)
@@ -84,6 +86,94 @@ test.describe('Document camera pinch', () => {
       await app.close()
     }
   })
+
+  for (const factor of [0.5, 2]) {
+    test(`resizes images in document coordinates at ${factor}x camera scale`, async() => {
+      const uri = 'data:image/svg+xml;base64,' + Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#21b56f"/></svg>'
+      ).toString('base64')
+      await setSourceMarkdown(page, app, `![camera](${uri})\n\nAfter image.\n`)
+      const image = page.locator('.editor-component .mu-inline-image img').first()
+      await expect(image).toBeVisible()
+      await expect.poll(() => image.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBe(200)
+      await pinch(page, factor)
+      await image.click()
+      const handle = page.locator('.mu-transformer .bar.right')
+      await expect(handle).toBeVisible()
+      const box = await handle.boundingBox()
+      if (!box) throw new Error('Image resize handle is missing')
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(box.x + box.width / 2 + 20 * factor, box.y + box.height / 2, { steps: 4 })
+      await page.mouse.up()
+      await expect.poll(async() => Math.abs(Number(await image.getAttribute('width')) - 220))
+        .toBeLessThanOrEqual(1)
+      const savedWidth = await image.getAttribute('width')
+      expect(await getMarkdownContent(page, app)).toContain(`width="${savedWidth}"`)
+    })
+  }
+
+  test('keeps arrow navigation inside wrapped paragraphs at 25% camera scale', async() => {
+    await setSourceMarkdown(page, app, 'aaaa bbbb cccc dddd eeee ffff gggg hhhh\n\nNext paragraph.\n')
+    await page.evaluate(() => {
+      const paragraph = document.querySelector<HTMLElement>('.mu-paragraph')
+      if (!paragraph) throw new Error('Paragraph is missing')
+      paragraph.style.width = '130px'
+    })
+    await pinch(page, 0.25)
+    await page.evaluate(() => {
+      const paragraph = document.querySelector('.mu-paragraph')
+      const text = paragraph && document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT).nextNode()
+      if (!text) throw new Error('Paragraph text is missing')
+      const root = document.querySelector<HTMLElement>('.mu-editor')
+      root?.focus()
+      const range = document.createRange()
+      range.setStart(text, 1)
+      range.collapse(true)
+      document.getSelection()?.removeAllRanges()
+      document.getSelection()?.addRange(range)
+    })
+    await page.keyboard.press('ArrowDown')
+    expect(await page.evaluate(() =>
+      document.getSelection()?.anchorNode?.parentElement?.closest('.mu-paragraph') === document.querySelector('.mu-paragraph')
+    )).toBe(true)
+  })
+
+  for (const factor of [0.25, 0.5, 1, 2, 4]) {
+    test(`maps clicks and caret drawing to source text at ${factor}x camera scale`, async() => {
+      await setSourceMarkdown(page, app, 'first line\nsecond line\nthird line\nfourth line\n')
+      await enterSourceMode(page, app)
+      await pinch(page, factor, '.source-code')
+      await page.locator('.source-code').evaluate(el => { el.scrollTop = 0; el.scrollLeft = 0 })
+      const line = page.locator('.source-code .CodeMirror-code .CodeMirror-line').nth(1)
+      await line.scrollIntoViewIfNeeded()
+      const box = await line.boundingBox()
+      if (!box) throw new Error('Source line is missing')
+      await page.mouse.click(box.x + 24, box.y + box.height / 2)
+      const caret = await page.locator('.source-code .CodeMirror').evaluate((el) => {
+        const cm = (el as HTMLElement & { CodeMirror?: { getCursor(): { line: number; ch: number } } }).CodeMirror
+        if (!cm) throw new Error('Source editor is missing')
+        return cm.getCursor()
+      })
+      expect(caret.line).toBe(1)
+      await page.keyboard.type('CAMERA')
+      await page.keyboard.insertText('中文')
+      await page.keyboard.press('End')
+      const positionError = await page.evaluate(() => {
+        const line = document.querySelectorAll('.source-code .CodeMirror-line')[1]
+        const cursor = document.querySelector('.source-code .CodeMirror-cursor')
+        if (!line || !cursor) throw new Error('Source caret is missing')
+        const range = document.createRange()
+        range.selectNodeContents(line)
+        return Math.abs(range.getBoundingClientRect().right - cursor.getBoundingClientRect().left)
+      })
+      expect(positionError).toBeLessThan(2)
+      const content = await getMarkdownContent(page, app)
+      expect(content.split('\n')[1]).toContain('CAMERA')
+      expect(content.split('\n')[1]).toContain('中文')
+      expect(content.split('\n')[2]).toBe('third line')
+    })
+  }
 
   test('preserves every block and line, UI size, and the point under the gesture', async() => {
     const before = await layoutSnapshot(page)

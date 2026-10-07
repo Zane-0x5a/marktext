@@ -383,6 +383,7 @@ onMounted(() => {
   if (!container) return
   const codeMirrorConfig: Record<string, unknown> = {
     value: markdown,
+    coordinateScale: () => camera?.scale ?? 1,
     lineNumbers: sourceCodeLineNumbers.value,
     autofocus: true,
     lineWrapping: true,

@@ -40,7 +40,9 @@ export function getCursorYOffset(paragraph: HTMLElement): { topOffset: number; b
 
     const { y } = coords;
     const { height, top } = paragraph.getBoundingClientRect();
-    const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight);
+    // The caret and paragraph rects include ancestor transforms; CSS line-height does not.
+    const scale = paragraph.offsetHeight ? height / paragraph.offsetHeight : 1;
+    const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight) * scale;
     const topOffset = Math.floor((y - top) / lineHeight);
     const bottomOffset = Math.round((top + height - lineHeight - y) / lineHeight);
 

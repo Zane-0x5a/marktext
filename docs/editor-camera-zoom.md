@@ -21,6 +21,13 @@ the stage's extent and the native scroll position. It never rerenders the
 document or serializes it. No permanent GPU layer is allocated for the entire
 document, and no bitmap snapshot is used for text zoom.
 
+CodeMirror 5 keeps its geometry caches in logical pixels through the
+`coordinateScale` getter supplied by the source editor. The bundled
+`packages/desktop/patches/codemirror+5.65.21.patch` converts screen coordinates
+at input and public API boundaries without refreshing the editor on each frame.
+Muya converts image resize deltas to logical widths and scales line heights
+when comparing caret rectangles for arrow navigation.
+
 The point under the gesture stays anchored while scroll bounds permit it.
 When the drawing is narrower than the viewport it is centered. The viewport
 reserves its vertical scrollbar gutter so new scrollbars cannot change wrapping.
@@ -41,3 +48,7 @@ exercise enlarged-coordinate text editing, scrolling, source mode, scale limits
 and tab-switch races, and report continuous-frame and event-burst measurements
 on a 160-section document. Physical touchpad feel depends on the device and OS;
 automated input exercises Chromium's Ctrl+wheel pinch event path.
+Editing regressions also cover scaled image resize, wrapped-paragraph arrow
+navigation, and source clicks, caret drawing and Chinese text insertion at
+25–400%. Source-mode print exports read the current tab and derive the TOC from
+the exported headings without modifying either editor's undo history.

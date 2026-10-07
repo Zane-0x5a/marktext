@@ -118,6 +118,8 @@ export const getCssForOptions = async(options: PdfCssOptions): Promise<string> =
 }
 
 export interface TocEntry {
+  /** Actual export heading id, when the entry comes from the rendered document. */
+  id?: string
   lvl: number
   content: string
   slug?: string
@@ -129,17 +131,13 @@ export interface HtmlTocOptions {
   [key: string]: unknown
 }
 
-// Replicate @muyajs/core's `MarkdownToHtml#_injectHeadingIds` slugging so the
-// TOC `href="#slug"` anchors target the exact ids the engine writes onto the
-// exported `<h1>..<h6>`: github-compatible base slug (falling back to
-// `heading` when the text slugs to empty), deduplicated in document order with
-// an incrementing `-N` suffix. Computed over the FULL heading list in order
-// (before the render-time filtering below) to keep the dedup sequence aligned
-// with the engine's whole-document pass.
+// Rendered ids include duplicate headings outside the TOC, such as block quotes.
+// Legacy entries without ids use the engine's slug algorithm and document-order
+// dedup before the render-time filtering below.
 const assignHeadingSlugs = (tocList: TocEntry[]): void => {
   const seen = new Set<string>()
   for (const entry of tocList) {
-    const base = generateGithubSlug(entry.content) || 'heading'
+    const base = entry.id || generateGithubSlug(entry.content) || 'heading'
     let slug = base
     let n = 1
     while (seen.has(slug)) {
