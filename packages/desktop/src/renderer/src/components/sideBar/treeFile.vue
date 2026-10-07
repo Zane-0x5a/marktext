@@ -3,12 +3,15 @@
     ref="fileEl"
     :title="file.pathname"
     class="side-bar-file"
+    tabindex="-1"
+    :draggable="renameCache !== file.pathname"
     :style="{ 'padding-left': `${depth * 6 + 10}px`, opacity: file.isMarkdown ? 1 : 0.75 }"
     :class="[
       { current: currentFile?.pathname === file.pathname, active: file.id === activeItem.id }
     ]"
     @click="handleFileClick"
     @dblclick="handleFileDblClick"
+    @dragstart.prevent.stop="handleFileDragStart"
   >
     <file-icon :name="file.name" />
     <input
@@ -76,6 +79,12 @@ const handleFileClick = (event: MouseEvent): void => {
 const handleFileDblClick = (): void => {
   if (!props.file.isMarkdown) return
   editorStore.FOCUS_FILE(props.file.pathname)
+}
+
+const handleFileDragStart = (): void => {
+  if (renameCache.value === props.file.pathname) return
+  projectStore.CHANGE_ACTIVE_ITEM(props.file)
+  window.electron.ipcRenderer.send('mt::start-file-drag', props.file.pathname)
 }
 
 const noop = (): void => {}
