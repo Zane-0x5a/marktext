@@ -1,4 +1,4 @@
-import { ipcMain, nativeImage } from 'electron'
+import { BrowserWindow, ipcMain, nativeImage } from 'electron'
 import type { NativeImage } from 'electron'
 import { statSync } from 'node:fs'
 import path from 'node:path'
@@ -25,7 +25,18 @@ export const registerFileDragHandlers = (): void => {
         .createFromPath(path.join(__static, 'logo-small.png'))
         .resize({ width: 32, height: 32 })
       if (dragIcon.isEmpty()) return
-      event.sender.startDrag({ file: pathname, icon: dragIcon })
+      // Windows keeps startDrag on the stack until drop or cancellation. macOS
+      // returns immediately and exposes no completion callback through this API.
+      const window = process.platform === 'win32'
+        ? BrowserWindow.fromWebContents(event.sender)
+        : null
+      const wasVisible = window?.isVisible() ?? false
+      try {
+        if (wasVisible) window?.hide()
+        event.sender.startDrag({ file: pathname, icon: dragIcon })
+      } finally {
+        if (wasVisible && window && !window.isDestroyed()) window.showInactive()
+      }
     } catch (error) {
       log.warn('Could not start file drag:', pathname, error)
     }

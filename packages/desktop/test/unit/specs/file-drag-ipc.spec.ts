@@ -3,17 +3,24 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const { handlers, icon, warn } = vi.hoisted(() => {
+const { handlers, icon, warn, sourceWindow } = vi.hoisted(() => {
   const icon = { isEmpty: vi.fn(() => false), resize: vi.fn() }
   icon.resize.mockReturnValue(icon)
   return {
     handlers: new Map<string, (event: unknown, pathname: unknown) => void>(),
     icon,
-    warn: vi.fn()
+    warn: vi.fn(),
+    sourceWindow: {
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      hide: vi.fn(),
+      showInactive: vi.fn()
+    }
   }
 })
 
 vi.mock('electron', () => ({
+  BrowserWindow: { fromWebContents: () => sourceWindow },
   ipcMain: {
     on: (channel: string, handler: (event: unknown, pathname: unknown) => void) =>
       handlers.set(channel, handler)
@@ -47,6 +54,10 @@ afterAll(() => {
 beforeEach(() => {
   warn.mockClear()
   icon.isEmpty.mockReturnValue(false)
+  sourceWindow.isVisible.mockReturnValue(true)
+  sourceWindow.isDestroyed.mockReturnValue(false)
+  sourceWindow.hide.mockClear()
+  sourceWindow.showInactive.mockClear()
   startDrag = vi.fn()
   const frame = {}
   event = { sender: { isDestroyed: () => false, mainFrame: frame, startDrag }, senderFrame: frame }
@@ -105,5 +116,37 @@ describe('Native file drag IPC', () => {
     })
     expect(() => drag(filename)).not.toThrow()
     expect(warn).toHaveBeenCalledOnce()
+  })
+
+  describe.skipIf(process.platform !== 'win32')('source window visibility', () => {
+    it('hides for the native drag and restores visibility without stealing focus on return', () => {
+      startDrag.mockImplementation(() => {
+        expect(sourceWindow.hide).toHaveBeenCalledOnce()
+        expect(sourceWindow.showInactive).not.toHaveBeenCalled()
+      })
+      drag(filename)
+      expect(sourceWindow.showInactive).toHaveBeenCalledOnce()
+    })
+
+    it('restores visibility when the native operation fails or is cancelled', () => {
+      startDrag.mockImplementation(() => { throw new Error('Drag failed') })
+      drag(filename)
+      expect(sourceWindow.hide).toHaveBeenCalledOnce()
+      expect(sourceWindow.showInactive).toHaveBeenCalledOnce()
+    })
+
+    it('does not reopen a window closed during the native drag', () => {
+      startDrag.mockImplementation(() => sourceWindow.isDestroyed.mockReturnValue(true))
+      drag(filename)
+      expect(sourceWindow.showInactive).not.toHaveBeenCalled()
+    })
+
+    it('preserves a window that was already hidden', () => {
+      sourceWindow.isVisible.mockReturnValue(false)
+      drag(filename)
+      expect(startDrag).toHaveBeenCalledOnce()
+      expect(sourceWindow.hide).not.toHaveBeenCalled()
+      expect(sourceWindow.showInactive).not.toHaveBeenCalled()
+    })
   })
 })
