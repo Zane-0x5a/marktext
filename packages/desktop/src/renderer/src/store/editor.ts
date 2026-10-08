@@ -280,7 +280,7 @@ export const useEditorStore = defineStore('editor', {
     /**
      * Update scroll position for the currentFile
      */
-    updateScrollPosition(id: string, scrollTop: number): void {
+    updateScrollPosition(id: string, scrollTop: number, scrollAnchor: IFileState['scrollAnchor'] = null): void {
       if (!(id in this.tabIdToIndex)) {
         console.warn('updateScrollPosition: Cannot find tab index for id:', id)
         return
@@ -289,6 +289,7 @@ export const useEditorStore = defineStore('editor', {
       const tab = this.tabs[this.tabIdToIndex[id]]
       if (tab) {
         tab.scrollTop = scrollTop
+        tab.scrollAnchor = scrollAnchor
       }
       debouncedSendBufferedState()
     },
@@ -374,6 +375,7 @@ export const useEditorStore = defineStore('editor', {
       const oldNotifications = tab.notifications
       // Preserve scroll across external reload so the editor stays put.
       const oldScrollTop = tab.scrollTop
+      const oldScrollAnchor = tab.scrollAnchor
       let oldHistory: IFileState['history'] | null = null
       const histIndex = tab.history.index
       if (histIndex >= 0 && tab.history.stack.length >= 1) {
@@ -396,6 +398,7 @@ export const useEditorStore = defineStore('editor', {
       tab.id = oldId
       tab.notifications = oldNotifications
       tab.scrollTop = oldScrollTop
+      tab.scrollAnchor = oldScrollAnchor
       if (oldHistory) {
         tab.history = oldHistory
       }
@@ -417,7 +420,7 @@ export const useEditorStore = defineStore('editor', {
       if (currentFile && pathname === currentFile.pathname) {
         // save current state first
         this.currentFile = tab
-        const { id, cursor, history, scrollTop, muyaIndexCursor } = tab // Should not use blocks history as this is loaded from disk
+        const { id, cursor, history, scrollTop, scrollAnchor, muyaIndexCursor } = tab // Should not use blocks history as this is loaded from disk
         bus.emit('file-changed', {
           id,
           markdown,
@@ -426,6 +429,7 @@ export const useEditorStore = defineStore('editor', {
           renderCursor: true,
           history,
           scrollTop,
+          scrollAnchor,
           // External disk reload: the engine handler records the new content as a
           // single invertible undo boundary (replaceContent) instead of clearing
           // history (setContent), so the first undo restores the pre-reload doc.
@@ -859,7 +863,7 @@ export const useEditorStore = defineStore('editor', {
       const oldCurrentFile = this.currentFile
       let didUpdateCurrentFile = false
       if (oldCurrentFile == null || oldCurrentFile.id !== currentFile.id) {
-        const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
+        const { id, markdown, cursor, history, pathname, scrollTop, scrollAnchor, blocks, muyaIndexCursor } =
           currentFile
         // Must run while `currentFile` still points at the outgoing tab, so its
         // flushed edit is attributed to that tab and not lost on switch (#2938).
@@ -886,6 +890,7 @@ export const useEditorStore = defineStore('editor', {
           renderCursor: true,
           history,
           scrollTop,
+          scrollAnchor,
           blocks
         })
       }
@@ -1063,7 +1068,7 @@ export const useEditorStore = defineStore('editor', {
         this.currentFile = fileState
         this.selectionWordCount = null
         if (fileState && typeof fileState.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
+          const { id, markdown, cursor, history, pathname, scrollTop, scrollAnchor, blocks, muyaIndexCursor } =
             fileState
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
@@ -1074,6 +1079,7 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
+            scrollAnchor,
             blocks
           })
         } else {
@@ -1156,7 +1162,7 @@ export const useEditorStore = defineStore('editor', {
           this.tabs[tabIndex] ?? this.tabs[tabIndex - 1] ?? this.tabs[0] ?? null
         this.selectionWordCount = null
         if (this.currentFile && typeof this.currentFile.markdown === 'string') {
-          const { id, markdown, cursor, history, pathname, scrollTop, blocks, muyaIndexCursor } =
+          const { id, markdown, cursor, history, pathname, scrollTop, scrollAnchor, blocks, muyaIndexCursor } =
             this.currentFile
           window.DIRNAME = pathname ? window.path.dirname(pathname) : ''
           bus.emit('file-changed', {
@@ -1167,6 +1173,7 @@ export const useEditorStore = defineStore('editor', {
             renderCursor: true,
             history,
             scrollTop,
+            scrollAnchor,
             blocks
           })
         }
@@ -2106,6 +2113,7 @@ interface BufferedTabState {
   wordCount: IFileState['wordCount']
   muyaIndexCursor: unknown
   scrollTop: number
+  scrollAnchor: IFileState['scrollAnchor']
 }
 
 const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): BufferedTabState => {
@@ -2125,7 +2133,8 @@ const createBufferedTabState = (tab: Partial<IFileState> & { id: string }): Buff
     cursor: toSerializableValue(tab.cursor, defaultFileState.cursor),
     wordCount: toSerializableValue(tab.wordCount, defaultFileState.wordCount),
     muyaIndexCursor: toSerializableValue(tab.muyaIndexCursor, defaultFileState.muyaIndexCursor),
-    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop
+    scrollTop: tab.scrollTop ?? defaultFileState.scrollTop,
+    scrollAnchor: toSerializableValue(tab.scrollAnchor, null)
   }
 }
 
