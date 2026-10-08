@@ -2,44 +2,51 @@
   <section
     class="print-preview"
     :aria-label="t('printPreview.title')"
-    :data-revision="snapshot?.revision"
+    :data-pages="pageCount || undefined"
+    :data-ready="ready || undefined"
   >
     <div class="preview-toolbar">
       <div class="page-navigation">
         <button
           :aria-label="t('printPreview.previous')"
           :disabled="!ready || currentPage <= 1"
-          @click="currentPage--"
+          @click="goToPage(currentPage - 1)"
         >
           <el-icon><ArrowLeft /></el-icon>
         </button>
         <label class="page-counter">
           <span class="sr-only">{{ t('printPreview.page') }}</span>
           <input
-            v-model.number="currentPage"
+            :value="currentPage"
             type="number"
             min="1"
             :max="pageCount"
             :disabled="!ready"
-            @change="clampPage"
+            @change="enterPage($event.target as HTMLInputElement)"
           >
           <span>/ {{ pageCount || '—' }}</span>
         </label>
         <button
           :aria-label="t('printPreview.next')"
           :disabled="!ready || currentPage >= pageCount"
-          @click="currentPage++"
+          @click="goToPage(currentPage + 1)"
         >
           <el-icon><ArrowRight /></el-icon>
         </button>
       </div>
+      <span
+        class="preview-status"
+        role="status"
+        aria-live="polite"
+      >{{ statusText }}</span>
       <label class="preview-zoom">
         <span class="sr-only">{{ t('printPreview.zoom') }}</span>
         <select
           v-model="zoom"
           :aria-label="t('printPreview.zoom')"
         >
-          <option value="fit">{{ t('printPreview.fit') }}</option>
+          <option value="width">{{ t('printPreview.fitWidth') }}</option>
+          <option value="page">{{ t('printPreview.fit') }}</option>
           <option
             v-for="value in [50, 75, 100, 125, 150, 200]"
             :key="value"
@@ -53,10 +60,13 @@
     <div
       ref="viewport"
       class="preview-viewport"
-      :aria-busy="loading"
+      :aria-busy="!ready"
       tabindex="0"
-      @keydown.left.prevent="previousPage"
-      @keydown.right.prevent="nextPage"
+      @scroll.passive="trackPage"
+      @keydown.left.prevent="goToPage(currentPage - 1)"
+      @keydown.right.prevent="goToPage(currentPage + 1)"
+      @keydown.page-up.prevent="goToPage(currentPage - 1)"
+      @keydown.page-down.prevent="goToPage(currentPage + 1)"
     >
       <div
         v-if="error"
@@ -66,80 +76,83 @@
         <el-icon><Warning /></el-icon>
         <h4>{{ t('printPreview.failed') }}</h4>
         <p>{{ error }}</p>
-        <button @click="refresh">
+        <button @click="reload">
           {{ t('printPreview.retry') }}
         </button>
       </div>
+      <!-- Never display:none: an iframe that is not rendered has no viewport,
+           and laying the document out there finds a single empty page. -->
       <div
-        v-else
-        class="page-sheet"
-        :class="{ pending: loading }"
-        :style="sheetStyle"
+        class="preview-canvas"
+        :class="{ stale: updating, concealed: !geometry || !!error }"
+        :style="canvasStyle"
       >
-        <canvas
-          ref="canvas"
-          :aria-label="t('printPreview.pageLabel', { page: currentPage })"
+        <iframe
+          ref="frame"
+          class="preview-frame"
+          sandbox="allow-same-origin"
+          tabindex="-1"
+          :title="t('printPreview.title')"
+          :style="frameStyle"
         />
-        <div
-          v-if="loading"
-          class="page-loading"
-          role="status"
-        >
-          {{ t('printPreview.generating') }}
-        </div>
+      </div>
+      <div
+        v-if="!geometry && !error"
+        class="preview-loading"
+      >
+        {{ t('printPreview.generating') }}
       </div>
     </div>
-    <div
-      class="preview-caption"
-      aria-live="polite"
-    >
-      {{ snapshot ? `${snapshot.layout.width} × ${snapshot.layout.height} mm` : '' }}
-      <span v-if="pageCount">{{ t('printPreview.totalPages', { count: pageCount }) }}</span>
+    <div class="preview-caption">
+      <span>{{ layoutCaption }}</span>
+      <span v-if="pageCount">{{ pageSummary }}</span>
     </div>
-    <div class="print-destination">
-      <label>
-        <span>{{ t('printPreview.printer') }}</span>
-        <select
-          v-model="device"
-          :disabled="working"
-          :aria-label="t('printPreview.printer')"
-        >
-          <option
-            v-if="!printers.length"
-            value=""
-          >{{ t('printPreview.noPrinter') }}</option>
-          <option
-            v-for="printer in printers"
-            :key="printer.name"
-            :value="printer.name"
+    <template v-if="mode === 'print'">
+      <div class="print-destination">
+        <label>
+          <span>{{ t('printPreview.printer') }}</span>
+          <select
+            v-model="device"
+            :disabled="working"
+            :aria-label="t('printPreview.printer')"
           >
-            {{ printer.displayName || printer.name }}
-          </option>
-        </select>
-      </label>
-      <label class="copies">
-        <span>{{ t('printPreview.copies') }}</span>
-        <input
-          v-model.number="copies"
-          type="number"
-          min="1"
-          max="99"
+            <option
+              v-if="!printers.length"
+              value=""
+            >{{ t('printPreview.noPrinter') }}</option>
+            <option
+              v-for="printer in printers"
+              :key="printer.name"
+              :value="printer.name"
+            >
+              {{ printer.displayName || printer.name }}
+            </option>
+          </select>
+        </label>
+        <label class="copies">
+          <span>{{ t('printPreview.copies') }}</span>
+          <input
+            v-model.number="copies"
+            type="number"
+            min="1"
+            max="99"
+            :disabled="working"
+            :aria-label="t('printPreview.copies')"
+          >
+        </label>
+        <button
+          class="refresh-printers"
           :disabled="working"
-          :aria-label="t('printPreview.copies')"
+          :aria-label="t('printPreview.refreshPrinters')"
+          @click="loadPrinters"
         >
-      </label>
-      <button
-        class="refresh-printers"
-        :disabled="working"
-        :aria-label="t('printPreview.refreshPrinters')"
-        @click="loadPrinters"
-      >
-        <el-icon><Refresh /></el-icon>
-      </button>
-    </div>
-    <p class="print-note">
-      {{ t('printPreview.note') }}
-    </p>
+          <el-icon><Refresh /></el-icon>
+        </button>
+      </div>
+      <p class="print-note">
+        {{ t('printPreview.note') }}
+      </p>
+    </template>
     <p
       v-if="actionMessage"
       class="action-message"
@@ -156,23 +169,19 @@
       </button>
       <div>
         <button
-          :disabled="!ready || working"
+          :class="{ 'button-primary': mode === 'pdf' }"
+          :disabled="!ready || working || updating"
           @click="save"
         >
-          {{ t('printPreview.savePdf') }}
+          {{ job === 'saving' ? t('printPreview.generatingPdf') : t('printPreview.savePdf') }}
         </button>
         <button
+          v-if="mode === 'print'"
           class="button-primary"
-          :disabled="!ready || working || !device || !validCopies"
+          :disabled="!ready || working || updating || !device || !validCopies"
           @click="print"
         >
-          {{
-            job === 'preparing'
-              ? t('printPreview.preparing', { page: stagedPage, count: pageCount })
-              : job === 'printing'
-                ? t('printPreview.printing')
-                : t('printPreview.print')
-          }}
+          {{ printLabel }}
         </button>
       </div>
     </div>
@@ -180,37 +189,61 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { computed, ref, shallowRef, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ArrowLeft, ArrowRight, Refresh, Warning } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import {
-  getDocument,
-  GlobalWorkerOptions,
-  type PDFDocumentProxy,
-  type RenderTask
-} from 'pdfjs-dist'
+import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import bus from '@/bus'
+import { useEditorStore } from '@/store/editor'
 import { getPrintLayout, type PreviewRequest } from '@/services/printService'
-import type { PrintSnapshot, PrintDevice, PrintOutcome } from '@shared/types/print'
+import { getCssForOptions, type PdfCssOptions } from '@/util/pdf'
+import {
+  PrintPreviewFrame,
+  SHEET_GAP,
+  type PreviewGeometry,
+  type PreviewSettings
+} from '@/printPreview/paginator'
+import type { PageChrome, PrintStyleOptions } from '@/printPreview/printCss'
+import type { PrintDevice, PrintLayout, PrintOutcome } from '@shared/types/print'
 import { PRINT_DPI } from '@shared/types/print'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
-const props = defineProps<{ options: Record<string, unknown>; title: string }>()
+const props = defineProps<{
+  options: Record<string, unknown>
+  title: string
+  /** `pdf` exports a file; `print` also offers printers. */
+  mode: 'print' | 'pdf'
+}>()
 const emit = defineEmits<{ busy: [value: boolean]; close: []; printed: [] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const invoke = window.electron.ipcRenderer.invoke
+
+// Space around the sheets inside the viewport, CSS px.
+const CANVAS_PADDING = 24
+// Pause after the last edit before the preview is laid out again.
+const UPDATE_DELAY_MS = 120
+// Pause after the preview settles before the PDF is generated in the background.
+const OUTPUT_DELAY_MS = 900
+
+interface Output {
+  revision: number
+  /** The main process session revision holding this PDF. */
+  snapshot: number
+  layout: PrintLayout
+  pdf: PDFDocumentProxy
+}
+
 const viewport = ref<HTMLElement>()
-const canvas = ref<HTMLCanvasElement>()
-const snapshot = ref<PrintSnapshot>()
-const pageCount = ref(0)
+const frame = ref<HTMLIFrameElement>()
+const geometry = shallowRef<PreviewGeometry>()
+const layout = shallowRef<PrintLayout>()
 const currentPage = ref(1)
-const zoom = ref('fit')
-const availableWidth = ref(600)
-const availableHeight = ref(500)
-const loading = ref(true)
-const ready = ref(false)
+const zoom = ref('width')
+const viewportWidth = ref(600)
+const viewportHeight = ref(500)
+const updating = ref(false)
 const error = ref('')
 const actionMessage = ref('')
 const printers = ref<PrintDevice[]>([])
@@ -218,143 +251,253 @@ const device = ref('')
 const copies = ref(1)
 const job = ref<'idle' | 'preparing' | 'printing' | 'saving'>('idle')
 const stagedPage = ref(0)
+// Pages in the PDF of the current layout, once it was generated.
+const printedPages = ref(0)
 const working = computed(() => job.value !== 'idle')
+const ready = computed(() => !!geometry.value && !error.value)
+const pageCount = computed(() => geometry.value?.pageCount ?? 0)
 const validCopies = computed(
   () => Number.isInteger(copies.value) && copies.value >= 1 && copies.value <= 99
 )
-let id = ''
+
+let session = ''
 let disposed = false
-let sequence = 0
-let generating = false
-let pending = false
-let timer: ReturnType<typeof setTimeout> | undefined
-let pdf: PDFDocumentProxy | undefined
-let renderTask: RenderTask | undefined
-let drawSequence = 0
+let preview: PrintPreviewFrame | null = null
+let contentKey = ''
+// Bumped whenever the laid-out preview changes; an output belongs to one revision.
+let revision = 0
+let applying: Promise<void> | null = null
+let applyAgain = false
+let updatePending = false
+let updateTimer: ReturnType<typeof setTimeout> | undefined
+let outputTimer: ReturnType<typeof setTimeout> | undefined
+let output: Output | null = null
+let outputTask: { revision: number; promise: Promise<Output> } | null = null
 let observer: ResizeObserver | undefined
-let resizeFrame = 0
 let canceled = false
 
-const displayScale = computed(() => {
-  const layout = snapshot.value?.layout
-  if (!layout) return 0.7
-  return zoom.value === 'fit'
-    ? Math.min(
-      (availableWidth.value - 56) / ((layout.width * 96) / 25.4),
-      (availableHeight.value - 48) / ((layout.height * 96) / 25.4),
-      1
-    )
-    : Number(zoom.value) / 100
+const scale = computed(() => {
+  const value = geometry.value
+  if (!value) return 1
+  const fitWidth = (viewportWidth.value - 2 * CANVAS_PADDING) / value.width
+  if (zoom.value === 'width') return Math.max(0.1, fitWidth)
+  if (zoom.value === 'page') {
+    const sheetHeight = value.pitch - SHEET_GAP
+    return Math.max(0.1, Math.min(fitWidth, (viewportHeight.value - 2 * CANVAS_PADDING) / sheetHeight))
+  }
+  return Number(zoom.value) / 100
 })
-const sheetStyle = computed(() => {
-  const layout = snapshot.value?.layout || { width: 210, height: 297 }
+const canvasStyle = computed(() => {
+  const value = geometry.value
+  if (!value) return {}
   return {
-    width: `${((layout.width * 96) / 25.4) * displayScale.value}px`,
-    height: `${((layout.height * 96) / 25.4) * displayScale.value}px`
+    width: `${value.width * scale.value}px`,
+    height: `${value.height * scale.value}px`,
+    margin: `${CANVAS_PADDING}px auto`
   }
 })
+const frameStyle = computed(() => {
+  const value = geometry.value
+  if (!value) return { width: '800px', height: '800px' }
+  return {
+    width: `${value.width * value.density}px`,
+    height: `${value.height * value.density}px`,
+    transform: `scale(${scale.value / value.density})`
+  }
+})
+const pageSummary = computed(() =>
+  printedPages.value && printedPages.value !== pageCount.value
+    ? t('printPreview.paginationDiffers', { actual: printedPages.value, expected: pageCount.value })
+    : t('printPreview.totalPages', { count: pageCount.value })
+)
+const layoutCaption = computed(() =>
+  layout.value ? `${layout.value.width} × ${layout.value.height} mm` : ''
+)
+const statusText = computed(() => {
+  if (error.value) return ''
+  if (!geometry.value) return t('printPreview.generating')
+  return updating.value ? t('printPreview.updating') : ''
+})
+const printLabel = computed(() =>
+  job.value === 'preparing'
+    ? stagedPage.value
+      ? t('printPreview.preparing', { page: stagedPage.value, count: pageCount.value })
+      : t('printPreview.generatingPdf')
+    : job.value === 'printing'
+      ? t('printPreview.printing')
+      : t('printPreview.print')
+)
 
-const clampPage = () => {
-  currentPage.value = Math.max(1, Math.min(pageCount.value, Math.round(currentPage.value || 1)))
-}
-const previousPage = () => {
-  if (ready.value && currentPage.value > 1) currentPage.value--
-}
-const nextPage = () => {
-  if (ready.value && currentPage.value < pageCount.value) currentPage.value++
+const goToPage = (page: number) => {
+  if (!ready.value || !viewport.value || !Number.isFinite(page)) return
+  const target = Math.max(1, Math.min(pageCount.value, Math.round(page)))
+  currentPage.value = target
+  viewport.value.scrollTop = CANVAS_PADDING + (target - 1) * geometry.value!.pitch * scale.value
 }
 
-const drawPage = async () => {
-  if (!Number.isInteger(currentPage.value) || currentPage.value < 1 || currentPage.value > pageCount.value) return
-  const ticket = ++drawSequence
-  renderTask?.cancel()
-  if (!pdf || !canvas.value || !ready.value || disposed) return
-  const document = pdf
+// The field keeps what was typed when the page it clamps to is already current.
+const enterPage = (input: HTMLInputElement) => {
+  goToPage(Number(input.value))
+  input.value = String(currentPage.value)
+}
+
+const trackPage = () => {
+  const value = geometry.value
+  if (!value || !viewport.value) return
+  const middle = viewport.value.scrollTop - CANVAS_PADDING + viewport.value.clientHeight / 2
+  currentPage.value = Math.max(1, Math.min(value.pageCount, Math.floor(middle / (value.pitch * scale.value)) + 1))
+}
+
+// Keep the page in view when the sheets are magnified or re-laid out.
+watch(scale, async () => {
+  const page = currentPage.value
+  await nextTick()
+  goToPage(page)
+})
+
+const requestHtml = (options: Record<string, unknown>) =>
+  new Promise<string>((resolve, reject) => {
+    bus.emit('prepare-print-preview', { options, resolve, reject } satisfies PreviewRequest)
+  })
+
+const formatDate = () =>
+  new Intl.DateTimeFormat(locale.value, { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())
+
+const previewSettings = async (options: Record<string, unknown>): Promise<PreviewSettings> => {
+  let printLayout: PrintLayout
   try {
-    const page = await document.getPage(currentPage.value)
-    if (document !== pdf || disposed || ticket !== drawSequence) return
-    const target = canvas.value
-    const view = page.getViewport({
-      scale: (96 / 72) * displayScale.value * Math.min(window.devicePixelRatio, 2)
-    })
-    target.width = Math.ceil(view.width)
-    target.height = Math.ceil(view.height)
-    renderTask = page.render({ canvas: target, viewport: view })
-    await renderTask.promise
-  } catch (err) {
-    if ((err as Error).name !== 'RenderingCancelledException' && !disposed && ticket === drawSequence) { error.value = String((err as Error).message) }
+    printLayout = getPrintLayout(options)
+  } catch {
+    throw new Error(t('printPreview.invalidLayout'))
+  }
+  const texts = (value: unknown): [string, string, string] => {
+    const list = Array.isArray(value) ? value : []
+    return [0, 1, 2].map((i) => (typeof list[i] === 'string' ? list[i] : '')) as [string, string, string]
+  }
+  const chrome: PageChrome = {
+    header: texts(options.header),
+    footer: texts(options.footer),
+    fontSize: Number(options.headerFooterFontSize) || 11,
+    ruled: options.headerFooterStyled === true,
+    title: props.title.replace(/\.(md|markdown|txt)$/i, ''),
+    date: formatDate()
+  }
+  return {
+    layout: printLayout,
+    css: await getCssForOptions(options as PdfCssOptions),
+    style: options as PrintStyleOptions,
+    chrome
   }
 }
 
-const generate = async () => {
-  if (disposed || !id || generating) {
-    pending = true
-    return
+// One layout pass at a time; edits arriving meanwhile are folded into one more.
+const apply = async (): Promise<void> => {
+  if (applying) {
+    applyAgain = true
+    return applying
   }
-  generating = true
-  pending = false
-  ready.value = false
-  loading.value = true
-  const ticket = sequence
-  const options = { ...props.options }
+  applying = (async () => {
+    do {
+      if (disposed) return
+      applyAgain = false
+      updatePending = false
+      const options = { ...props.options }
+      updating.value = true
+      try {
+        // Let the status paint before the synchronous layout.
+        await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)))
+        const settings = await previewSettings(options)
+        if (disposed) return
+        const key = JSON.stringify([options.tocTitle, options.tocIncludeTopHeading])
+        if (key !== contentKey || !preview) {
+          const html = await requestHtml(options)
+          if (disposed) return
+          preview = new PrintPreviewFrame(frame.value!)
+          await preview.load(html)
+          contentKey = key
+        }
+        const page = currentPage.value
+        const next = await preview.update(settings)
+        if (disposed) return
+        revision++
+        printedPages.value = 0
+        layout.value = settings.layout
+        geometry.value = next
+        error.value = ''
+        await nextTick()
+        goToPage(Math.min(page, next.pageCount))
+        if (!updatePending && !applyAgain) scheduleOutput()
+      } catch (err) {
+        if (!disposed) error.value = (err as Error).message
+      } finally {
+        // An edit made meanwhile is still waiting for its own pass.
+        updating.value = updatePending || applyAgain
+      }
+    } while (applyAgain)
+  })()
   try {
-    let layout
-    try {
-      layout = getPrintLayout(options)
-    } catch {
-      throw new Error(t('printPreview.invalidLayout'))
-    }
-    const html = await new Promise<string>((resolve, reject) => {
-      bus.emit('prepare-print-preview', { options, resolve, reject } satisfies PreviewRequest)
-    })
-    if (disposed || ticket !== sequence) return
-    const result = await invoke('mt::print-preview::render', id, html, layout)
-    if (disposed || ticket !== sequence) return
-    renderTask?.cancel()
-    await pdf?.destroy()
-    pdf = await getDocument({ data: result.pdf.slice(), isEvalSupported: false }).promise
-    if (disposed || ticket !== sequence) {
-      await pdf.destroy()
-      pdf = undefined
-      return
-    }
-    snapshot.value = result
-    pageCount.value = pdf.numPages
-    clampPage()
-    error.value = ''
-    ready.value = true
-    loading.value = false
-    await nextTick()
-    await drawPage()
-  } catch (err) {
-    if (!disposed && ticket === sequence) {
-      error.value = (err as Error).message
-      loading.value = false
-    }
+    await applying
   } finally {
-    generating = false
-    if (pending && !disposed && !timer) generate()
+    applying = null
   }
 }
 
-const refresh = () => {
-  sequence++
-  ready.value = false
-  loading.value = true
-  error.value = ''
+const scheduleUpdate = () => {
   actionMessage.value = ''
-  pending = true
-  clearTimeout(timer)
-  timer = setTimeout(() => {
-    timer = undefined
-    generate()
-  }, 250)
+  // Marked stale at once: actions must not use the layout being replaced.
+  updatePending = true
+  updating.value = true
+  clearTimeout(updateTimer)
+  clearTimeout(outputTimer)
+  updateTimer = setTimeout(apply, UPDATE_DELAY_MS)
 }
-watch(() => props.options, refresh, { deep: true, flush: 'sync' })
-watch([currentPage, displayScale], () => {
-  drawPage()
-})
-watch(working, (value) => emit('busy', value))
+watch(() => props.options, scheduleUpdate, { deep: true })
+
+const reload = () => {
+  contentKey = ''
+  error.value = ''
+  scheduleUpdate()
+}
+
+const scheduleOutput = () => {
+  clearTimeout(outputTimer)
+  outputTimer = setTimeout(() => {
+    if (!working.value && !updating.value) ensureOutput().catch(() => {})
+  }, OUTPUT_DELAY_MS)
+}
+
+/** The PDF of the current preview, generated once per revision and verified. */
+const ensureOutput = (): Promise<Output> => {
+  if (output?.revision === revision) return Promise.resolve(output)
+  if (outputTask?.revision === revision) return outputTask.promise
+  const target = revision
+  const printLayout = layout.value!
+  const expected = geometry.value!.pageCount
+  const promise = (async () => {
+    const html = preview!.buildPrintDocument()
+    const result = await invoke('mt::print-preview::render', session, html, printLayout)
+    const pdf = await getDocument({ data: result.pdf.slice(), isEvalSupported: false }).promise
+    if (disposed || target !== revision) {
+      await pdf.destroy()
+      throw new Error(t('printPreview.outdated'))
+    }
+    // Every preview page start is a forced break, so a page that did not fit
+    // in print shows up as an extra page. The PDF is still usable.
+    if (pdf.numPages !== expected) console.warn(`Print preview showed ${expected} pages, the PDF has ${pdf.numPages}`)
+    printedPages.value = pdf.numPages
+    // Owned before anything else is awaited, so closing the dialog meanwhile releases it.
+    const previous = output
+    const current = { revision: target, snapshot: result.revision, layout: printLayout, pdf }
+    output = current
+    await previous?.pdf.destroy()
+    return current
+  })()
+  outputTask = { revision: target, promise }
+  promise.catch(() => {}).finally(() => {
+    if (outputTask?.promise === promise) outputTask = null
+  })
+  return promise
+}
 
 const loadPrinters = async () => {
   try {
@@ -378,18 +521,26 @@ const showOutcome = (result: PrintOutcome, savePdf: boolean) => {
 }
 
 const save = async () => {
-  if (!ready.value || !snapshot.value || working.value) return
+  if (!ready.value || working.value) return
   job.value = 'saving'
+  actionMessage.value = ''
+  let exported = false
   try {
-    showOutcome(
-      await invoke('mt::print-preview::save', id, snapshot.value.revision, props.title),
-      true
-    )
+    const { snapshot } = await ensureOutput()
+    const { currentFile, documentTitle } = useEditorStore()
+    const result = await invoke('mt::print-preview::save', session, snapshot, {
+      pathname: currentFile?.pathname || null,
+      title: documentTitle
+    })
+    showOutcome(result, true)
+    exported = result.status === 'success' && props.mode === 'pdf'
   } catch (err) {
     actionMessage.value = (err as Error).message
   } finally {
     job.value = 'idle'
   }
+  // An export is done once the file is written; the export notice links to it.
+  if (exported) emit('close')
 }
 
 const cancel = () => {
@@ -398,13 +549,14 @@ const cancel = () => {
 }
 
 const print = async () => {
-  if (!ready.value || !snapshot.value || !pdf || !validCopies.value || working.value) return
-  const revision = snapshot.value.revision
+  if (!ready.value || !validCopies.value || working.value) return
   canceled = false
   job.value = 'preparing'
+  stagedPage.value = 0
   actionMessage.value = ''
   try {
-    for (let number = 1; number <= pageCount.value; number++) {
+    const { pdf, snapshot } = await ensureOutput()
+    for (let number = 1; number <= pdf.numPages; number++) {
       if (canceled || disposed) break
       stagedPage.value = number
       const page = await pdf.getPage(number)
@@ -421,7 +573,7 @@ const print = async () => {
       )
       sheet.width = sheet.height = 0
       if (canceled || disposed) break
-      await invoke('mt::print-preview::page', id, revision, {
+      await invoke('mt::print-preview::page', session, snapshot, {
         number,
         png: new Uint8Array(await blob.arrayBuffer())
       })
@@ -432,56 +584,52 @@ const print = async () => {
     }
     job.value = 'printing'
     showOutcome(
-      await invoke(
-        'mt::print-preview::print',
-        id,
-        revision,
-        device.value,
-        copies.value,
-        pageCount.value
-      ),
+      await invoke('mt::print-preview::print', session, snapshot, device.value, copies.value, pdf.numPages),
       false
     )
   } catch (err) {
     actionMessage.value = (err as Error).message
   } finally {
     job.value = 'idle'
+    stagedPage.value = 0
   }
 }
 
+watch(working, (value) => emit('busy', value))
+// Print export can be chosen while the PDF export preview is open.
+watch(
+  () => props.mode,
+  (mode) => {
+    if (mode === 'print' && !printers.value.length) loadPrinters()
+  }
+)
+
 onMounted(async () => {
   observer = new ResizeObserver(([entry]) => {
-    cancelAnimationFrame(resizeFrame)
-    resizeFrame = requestAnimationFrame(() => {
-      if (disposed) return
-      availableWidth.value = entry.contentRect.width
-      availableHeight.value = entry.contentRect.height
-    })
+    viewportWidth.value = entry.contentRect.width
+    viewportHeight.value = entry.contentRect.height
   })
   if (viewport.value) observer.observe(viewport.value)
-  loadPrinters()
+  if (props.mode === 'print') loadPrinters()
   try {
-    id = await invoke('mt::print-preview::open')
+    session = await invoke('mt::print-preview::open')
     if (disposed) {
-      await invoke('mt::print-preview::close', id)
+      await invoke('mt::print-preview::close', session)
       return
     }
-    await generate()
+    await apply()
   } catch (err) {
     error.value = (err as Error).message
-    loading.value = false
   }
 })
 onBeforeUnmount(() => {
   disposed = true
   canceled = true
-  sequence++
-  clearTimeout(timer)
+  clearTimeout(updateTimer)
+  clearTimeout(outputTimer)
   observer?.disconnect()
-  cancelAnimationFrame(resizeFrame)
-  renderTask?.cancel()
-  pdf?.destroy().catch(() => {})
-  if (id) invoke('mt::print-preview::close', id).catch(() => {})
+  output?.pdf.destroy().catch(() => {})
+  if (session) invoke('mt::print-preview::close', session).catch(() => {})
 })
 </script>
 
@@ -490,19 +638,29 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   height: 100%;
   color: var(--editorColor);
 }
 .preview-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 0 0 12px;
 }
 .page-navigation {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.preview-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--editorColor60);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .page-navigation button,
 .refresh-printers {
@@ -559,46 +717,51 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 .page-counter input {
-  width: 48px;
+  width: 52px;
   text-align: center;
 }
 .preview-viewport {
+  position: relative;
   flex: 1;
-  min-height: 180px;
+  min-height: 0;
   overflow: auto;
   background: var(--editorColor04);
   border-radius: 6px;
-  padding: 24px;
   scrollbar-color: var(--editorColor30) transparent;
   scrollbar-width: thin;
 }
-.page-sheet {
-  margin: 0 auto;
-  background: white;
-  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.14);
+.preview-canvas {
   position: relative;
-  flex-shrink: 0;
+  transition: opacity 0.12s ease-out;
 }
-.page-sheet canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+/* Still the previous layout while the next one is computed. */
+.preview-canvas.stale {
+  opacity: 0.75;
 }
-.page-sheet.pending canvas {
-  opacity: 0.3;
+.preview-canvas.concealed {
+  visibility: hidden;
 }
-.page-loading {
+.preview-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  background: transparent;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.preview-loading {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  color: #4d4d4d;
+  color: var(--editorColor60);
   font-size: 14px;
 }
 .preview-caption {
   display: flex;
   justify-content: space-between;
-  padding: 10px 0 16px;
+  padding: 10px 0 14px;
   color: var(--editorColor60);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -644,8 +807,11 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 .preview-message {
+  position: absolute;
+  inset: 48px 0 auto;
+  z-index: 1;
   max-width: 360px;
-  margin: 48px auto;
+  margin: 0 auto;
   text-align: center;
 }
 .preview-message h4 {

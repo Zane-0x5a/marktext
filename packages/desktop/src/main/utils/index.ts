@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import path from 'path'
 
 const ID_PREFIX = 'mt-'
 let id = 0
@@ -37,6 +38,21 @@ export const getPath = (name: Parameters<typeof app.getPath>[0]): string => {
     throw new Error('Do not use "getPath" for user data path!')
   }
   return app.getPath(name)
+}
+
+/**
+ * Where the save dialog for an exported copy starts: next to the document and
+ * named after it, or named by `title` in Documents for an unsaved one.
+ */
+export const getExportDefaultPath = (
+  pathname: string | null | undefined,
+  title: string | undefined,
+  extension: string
+): string => {
+  const name = pathname ? path.basename(pathname, path.extname(pathname)) : title
+  // A title can carry a slash or another character the OS refuses in a basename.
+  const stem = (name || '').replace(/[/\\:*?"<>|]/g, '-').trim() || 'Untitled'
+  return path.join(pathname ? path.dirname(pathname) : getPath('documents'), stem + extension)
 }
 
 export const hasSameKeys = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {

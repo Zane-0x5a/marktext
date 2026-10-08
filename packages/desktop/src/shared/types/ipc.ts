@@ -53,7 +53,10 @@ export interface IpcInvokeChannels {
   'mt::print-preview::render': { args: [id: string, html: string, layout: PrintLayout]; ret: PrintSnapshot }
   'mt::print-preview::printers': { args: []; ret: PrintDevice[] }
   'mt::print-preview::page': { args: [id: string, revision: number, page: PrintPage]; ret: void }
-  'mt::print-preview::save': { args: [id: string, revision: number, title: string]; ret: PrintOutcome }
+  'mt::print-preview::save': {
+    args: [id: string, revision: number, document: { pathname: string | null; title: string }]
+    ret: PrintOutcome
+  }
   'mt::print-preview::print': {
     args: [id: string, revision: number, deviceName: string, copies: number, count: number]
     ret: PrintOutcome

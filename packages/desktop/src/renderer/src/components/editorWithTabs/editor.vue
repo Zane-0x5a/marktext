@@ -100,15 +100,15 @@ import {
 } from '@muyajs/core'
 import { getMuyaLocale } from '@/util/muyaLocale'
 import { EditorCamera } from '@/util/editorCamera'
-import { exportStyledHTML, type HeaderFooterPart } from '@/util/exportHtml'
 import { DocumentVirtualizer, type ScrollAnchor } from '@/util/documentVirtualizer'
+import { exportStyledHTML } from '@/util/exportHtml'
 import { applyCursor, isIndexCursor } from '@/util/cursor'
 import EditorSearch from '../search/index.vue'
 import MediaViewer from '../mediaViewer/index.vue'
 import bus from '@/bus'
 import { DEFAULT_EDITOR_FONT_FAMILY, DEFAULT_CODE_FONT_FAMILY } from '@/config'
 import notice from '@/services/notification'
-import { getPrintLayout, preparePrintDocument, type PreviewRequest } from '@/services/printService'
+import { preparePrintDocument, type PreviewRequest } from '@/services/printService'
 import { SpellcheckerLanguageCommand } from '@/commands'
 import { SpellChecker } from '@/spellchecker'
 import { isMac, animatedScrollTo, cancelScrollAnimation } from '@/util'
@@ -1271,35 +1271,23 @@ const handleFindAction = (action: unknown) => {
 
 interface ExportOptions {
   type: string
-  header?: unknown
-  footer?: unknown
-  headerFooterStyled?: unknown
   htmlTitle?: string
-  pageSize?: string
-  pageSizeWidth?: number
-  pageSizeHeight?: number
-  isLandscape?: boolean
   [key: string]: unknown
 }
 
+// The paged preview adds page geometry, running text and option styles itself.
 const generatePrintHtml = async (opts: ExportOptions): Promise<string> => {
   const muya = editor.value
   if (!muya) throw new Error('No document is open')
   // Source edits belong to the tab until that mode exits; the hidden Muya is stale.
   const markdown = sourceCode.value ? currentFile.value?.markdown ?? '' : muya.getMarkdown()
-  const layout = getPrintLayout(opts)
-  const extraCss = await getCssForOptions(opts as PdfCssOptions)
   const html = await exportStyledHTML(muya, markdown, {
     title: '',
     printOptimization: true,
-    extraCss,
     tocOptions: opts as HtmlTocOptions,
-    header: (opts.header ?? null) as HeaderFooterPart | null,
-    footer: (opts.footer ?? null) as HeaderFooterPart | null,
-    headerFooterStyled: opts.headerFooterStyled as boolean | undefined,
     dir: props.textDirection
   })
-  return preparePrintDocument(html, layout)
+  return preparePrintDocument(html)
 }
 
 const handlePreparePrintPreview = async (payload: unknown) => {
@@ -1315,7 +1303,7 @@ const handleExport = async (options: unknown) => {
   const opts = options as ExportOptions
   const { type, htmlTitle } = opts
 
-  if (!/^pdf|print|styledHtml$/.test(type)) {
+  if (!/^(print|styledHtml)$/.test(type)) {
     throw new Error(`Invalid type to export: "${type}".`)
   }
 
@@ -1343,20 +1331,6 @@ const handleExport = async (options: unknown) => {
           type: 'error',
           message:
             (err as { message?: string } | null | undefined)?.message ?? t('editor.export.error')
-        })
-      }
-      break
-    }
-    case 'pdf': {
-      try {
-        const content = await generatePrintHtml(opts)
-        editorStore.EXPORT({ type, content })
-      } catch (err) {
-        log.error('Failed to export document:', err)
-        notice.notify({
-          title: t('editor.export.failed', { type: 'PDF' }),
-          type: 'error',
-          message: t('editor.export.errorExporting', { type: htmlTitle || 'PDF' })
         })
       }
       break

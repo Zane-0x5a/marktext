@@ -23,8 +23,12 @@ export const getPrintLayout = (options: Record<string, unknown>): PrintLayout =>
   return layout
 }
 
-/** Standalone print document; no editor transform, zoom, or UI styles travel with it. */
-export const preparePrintDocument = (html: string, layout: PrintLayout): string => {
+/**
+ * Standalone print document; no editor transform, zoom, or UI styles travel
+ * with it. Page geometry, running text and option styles are added by the
+ * paged preview (`@/printPreview`).
+ */
+export const preparePrintDocument = (html: string): string => {
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const body = doc.createElement('article')
   body.className = 'print-container'
@@ -32,12 +36,9 @@ export const preparePrintDocument = (html: string, layout: PrintLayout): string 
   doc.body.replaceChildren(body)
   const style = doc.createElement('style')
   style.textContent = `${printCss}\n@media print {
-    @page { size: ${layout.width}mm ${layout.height}mm;
-      margin: ${layout.top}mm ${layout.right}mm ${layout.bottom}mm ${layout.left}mm; }
     body .print-container { height: auto; }
     html, body { margin: 0 !important; padding: 0 !important; }
     body article.markdown-body { width: 100%; max-width: none; min-width: 0; padding: 0; }
-    .page-container > tbody > tr > td { width: 100%; }
     .markdown-body table { width: 100%; table-layout: fixed; }
     .markdown-body tr, .markdown-body img { break-inside: avoid; }
     .markdown-body img, .markdown-body svg { max-width: 100%; height: auto; }
