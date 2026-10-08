@@ -71,10 +71,13 @@ test('a second instance started with --user-data-dir opens its file in the runni
   // CI runner can't use Chromium's SUID sandbox, so start the second instance
   // the same way.
   const sandboxArgs = process.platform === 'linux' ? ['--no-sandbox'] : []
+  const env = { ...process.env, PERF_TESTING: 'true' }
+  // As in `launchElectron`: it would start the second instance as plain Node.
+  delete env.ELECTRON_RUN_AS_NODE
   const secondInstance = spawn(
     getElectronPath(),
     [projectRoot, 'second.md', '--user-data-dir', userDataDir, ...sandboxArgs],
-    { cwd: docDir, env: { ...process.env, PERF_TESTING: 'true' } }
+    { cwd: docDir, env }
   )
   try {
     const { code, signal, output } = await waitForExit(secondInstance, 15000)
