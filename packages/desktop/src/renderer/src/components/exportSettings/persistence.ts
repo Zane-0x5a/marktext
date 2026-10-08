@@ -2,7 +2,7 @@
 // options were component-local refs with hardcoded defaults, so every restart
 // (and every dialog open) reset them. We store the chosen values in
 // localStorage — the same renderer-side persistence the sidebar width uses —
-// and restore them when the dialog opens.
+// and restore them when the dialog component mounts (defaults: `state.ts`).
 
 export const EXPORT_SETTINGS_STORAGE_KEY = 'export-settings'
 

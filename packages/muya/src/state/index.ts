@@ -52,8 +52,21 @@ class JSONState {
 
     private _state: TState[] = [];
 
+    // Bumped whenever `_state` is replaced or an op is applied, so readers can
+    // cache data derived from the document.
+    private _revision = 0;
+
     constructor(private _muya: Muya, stateOrMarkdown: TState[] | string) {
         this.setContent(stateOrMarkdown);
+    }
+
+    get revision() {
+        return this._revision;
+    }
+
+    /** The live document without the copy `getState` makes. Callers must not mutate it. */
+    get liveState(): readonly TState[] {
+        return this._state;
     }
 
     private _apply(op: JSONOp) {
@@ -63,6 +76,7 @@ class JSONState {
         if (op === null)
             return;
         this._state = asState(json1.type.apply(asDoc(this._state), op));
+        this._revision++;
     }
 
     setContent(content: TState[] | string) {
@@ -84,10 +98,12 @@ class JSONState {
 
     private _setState(state: TState[]) {
         this._state = state;
+        this._revision++;
     }
 
     private _setMarkdown(markdown: string) {
         this._state = this.markdownToState(markdown);
+        this._revision++;
     }
 
     // Parse markdown into a block-state array with the editor's current

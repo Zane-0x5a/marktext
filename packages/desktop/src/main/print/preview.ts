@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
+import { getExportDefaultPath } from '../utils'
 import {
   validatePrintLayout,
   PRINT_DPI,
@@ -138,17 +139,6 @@ export const renderPrintPdf = async(
   })
 }
 
-export const exportPrintPdf = async(html: string): Promise<Buffer> => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'marktext-export-'))
-  const win = workerWindow()
-  try {
-    return await renderPrintPdf(win, path.join(directory, 'document.html'), html)
-  } finally {
-    if (!win.isDestroyed()) win.destroy()
-    await rm(directory, { recursive: true, force: true })
-  }
-}
-
 export const registerPrintPreviewHandlers = (): void => {
   ipcMain.handle('mt::print-preview::open', async(event) => {
     for (const [id, session] of sessions) {
@@ -242,19 +232,28 @@ export const registerPrintPreviewHandlers = (): void => {
 
   ipcMain.handle(
     'mt::print-preview::save',
-    async(event, id: string, revision: number, title: string): Promise<PrintOutcome> => {
+    async(
+      event,
+      id: string,
+      revision: number,
+      document: { pathname: string | null; title: string }
+    ): Promise<PrintOutcome> => {
       const session = owned(event.sender, id, revision)
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!session.pdf || !win || session.busy) throw new Error('Print preview is not ready')
+      const pathname = typeof document?.pathname === 'string' ? document.pathname : null
+      const title = typeof document?.title === 'string' ? document.title : ''
       session.busy = true
       try {
         const result = await dialog.showSaveDialog(win, {
-          defaultPath: `${(title || 'Untitled').replace(/[/\\:*?"<>|]/g, '-')}.pdf`,
+          defaultPath: getExportDefaultPath(pathname, title, '.pdf'),
           filters: [{ name: 'PDF', extensions: ['pdf'] }]
         })
         if (result.canceled || !result.filePath) return { status: 'canceled' }
         owned(event.sender, id, revision)
         await writeFile(result.filePath, session.pdf)
+        // Same notice as any other export, with a link to the file.
+        event.sender.send('mt::export-success', { type: 'pdf', filePath: result.filePath })
         return { status: 'success' }
       } catch (error) {
         return { status: 'error', error: error instanceof Error ? error.message : String(error) }

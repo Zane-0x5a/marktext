@@ -53,14 +53,7 @@ const printWrapSelectors = (css: string): string[] => {
 
 const renderPrintContainer = async(markdown: string): Promise<Element> => {
   const html = await exportStyledHTML(NO_MUYA, markdown, {})
-  const printed = preparePrintDocument(html, {
-    width: 210,
-    height: 297,
-    top: 20,
-    right: 20,
-    bottom: 20,
-    left: 20
-  })
+  const printed = preparePrintDocument(html)
   const doc = new DOMParser().parseFromString(printed, 'text/html')
   const code = doc.querySelector('article.print-container pre code')
   expect(code).not.toBeNull()

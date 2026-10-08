@@ -22,15 +22,24 @@ const markdown =
   '"\n```\n\n' +
   '$$\n\\int_0^1 x^2 dx = \\frac{1}{3}\n$$\n\n' +
   '```mermaid\ngraph LR\n A[编辑文档] --> B[预览分页]\n B --> C[打印页面]\n```\n\n' +
+  '1. First ordered item\n2. Second ordered item\n3. Third ordered item\n\n' +
   Array.from(
     { length: 12 },
-    (_, i) => `## Section ${i + 1} / 章节\n\n${paragraph.repeat(5)}\n\n`
+    (_, i) => `## Section ${i + 1} / 章节\n\n${paragraph.repeat(5)}\n\n- point ${i + 1}a\n- point ${i + 1}b\n\n`
   ).join('')
 
 interface CapturedJob {
   pdf: number[]
   options: Record<string, unknown>
   images: string[]
+}
+
+interface PrintState {
+  printJobs: CapturedJob[]
+  printResult: 'cancel' | 'fail' | 'success'
+  failRender: boolean
+  renderDelay: number
+  pdfCalls: number
 }
 
 const setupPrintBoundary = async(app: ElectronApplication) => {
@@ -48,19 +57,16 @@ const setupPrintBoundary = async(app: ElectronApplication) => {
         options: {}
       }
     ]
-    const state = global as unknown as {
-      printJobs: CapturedJob[]
-      printResult: 'cancel' | 'fail' | 'success'
-      failRender: boolean
-      renderDelay: number
-    }
+    const state = global as unknown as PrintState
     state.printJobs = []
     state.printResult = 'cancel'
     state.failRender = false
     state.renderDelay = 0
+    state.pdfCalls = 0
     app.on('web-contents-created', (_event, contents) => {
       const originalPdf = contents.printToPDF.bind(contents)
       contents.printToPDF = async(options) => {
+        state.pdfCalls++
         if (state.renderDelay) { await new Promise((resolve) => setTimeout(resolve, state.renderDelay)) }
         if (state.failRender) throw new Error('Injected PDF rendering failure')
         return originalPdf(options)
@@ -90,26 +96,56 @@ const setupPrintBoundary = async(app: ElectronApplication) => {
   })
 }
 
+const setState = (app: ElectronApplication, values: Partial<PrintState>) =>
+  app.evaluate((_electron, next) => {
+    Object.assign(global as unknown as PrintState, next)
+  }, values)
+
+const getState = <K extends keyof PrintState>(app: ElectronApplication, key: K): Promise<PrintState[K]> =>
+  app.evaluate((_electron, name) => (global as unknown as PrintState)[name], key) as Promise<PrintState[K]>
+
 const waitReady = async(page: Page) => {
-  await expect(page.locator('.page-loading')).toHaveCount(0, { timeout: 30000 })
+  await expect(page.locator('.print-preview[data-ready]')).toHaveCount(1, { timeout: 30000 })
+  await expect(page.locator('.preview-canvas.stale')).toHaveCount(0, { timeout: 30000 })
   await expect(page.locator('.preview-message')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeEnabled({
-    timeout: 30000
-  })
-  await expect
-    .poll(() =>
-      page.locator('.page-sheet canvas').evaluate((el) => (el as HTMLCanvasElement).width)
-    )
-    .toBeGreaterThan(100)
 }
+
+const previewPageCount = async(page: Page) => Number(await page.locator('.print-preview').getAttribute('data-pages'))
+
+// The text each preview sheet holds, read from the laid-out iframe.
+const previewPages = (page: Page) =>
+  page.locator('.preview-frame').evaluate((element) => {
+    const doc = (element as HTMLIFrameElement).contentDocument!
+    const tops = Array.from(doc.querySelectorAll('.mt-sheet'), (sheet) => sheet.getBoundingClientRect().top)
+    const content = doc.querySelector('article.markdown-body')!
+    const texts = tops.map(() => '')
+    const walker = doc.createTreeWalker(content, NodeFilter.SHOW_TEXT)
+    const range = doc.createRange()
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      for (let i = 0; i < node.length; i++) {
+        if (!node.data[i].trim()) continue
+        range.setStart(node, i)
+        range.setEnd(node, i + 1)
+        const rect = range.getClientRects()[0]
+        if (!rect || !rect.width) continue
+        const middle = rect.top + rect.height / 2
+        let sheet = 0
+        while (sheet + 1 < tops.length && tops[sheet + 1] <= middle) sheet++
+        texts[sheet] += node.data[i]
+      }
+    }
+    return texts
+  })
 
 const savePdf = async(app: ElectronApplication, page: Page, target: string) => {
   await app.evaluate(({ dialog }, filePath) => {
     dialog.showSaveDialog = async() => ({ canceled: false, filePath })
   }, target)
   await page.getByRole('button', { name: 'Save PDF', exact: true }).click()
-  await expect.poll(() => fs.existsSync(target)).toBe(true)
-  await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeEnabled()
+  await expect
+    .poll(async() => fs.existsSync(target) || (await page.locator('.action-message').textContent().catch(() => null)), { timeout: 60000 })
+    .toBe(true)
+  await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeEnabled({ timeout: 60000 })
   return fs.readFileSync(target)
 }
 
@@ -134,7 +170,41 @@ const readPdf = async(data: Buffer) => {
   return pages
 }
 
-test.describe('Print preview with Chromium pagination', () => {
+// Letters and digits on a printed page that the preview sheet does not hold,
+// and vice versa. Only ASCII is compared: PDF text extraction returns some CJK
+// characters as radicals (页 as ⻚) that NFKC does not fold back.
+const pageDifference = (preview: string, printed: string): number => {
+  const counts = new Map<string, number>()
+  for (const char of preview.normalize('NFKC').replace(/[^A-Za-z0-9]/g, '')) counts.set(char, (counts.get(char) ?? 0) + 1)
+  for (const char of printed.replace(/[^A-Za-z0-9]/g, '')) counts.set(char, (counts.get(char) ?? 0) - 1)
+  return [...counts.values()].reduce((sum, value) => sum + Math.abs(value), 0)
+}
+
+const expectSamePages = async(page: Page, printed: Awaited<ReturnType<typeof readPdf>>, extra = '') => {
+  const preview = await previewPages(page)
+  expect(printed.length).toBe(preview.length)
+  preview.forEach((text, i) => {
+    const difference = pageDifference(text, printed[i].text.replace(extra, ''))
+    expect(difference, `page ${i + 1} holds the previewed text`).toBeLessThanOrEqual(4)
+  })
+}
+
+// Each select's own listbox: another one may still be fading out.
+const choose = async(page: Page, select: string, option: RegExp | string) => {
+  const listbox = await page.locator(select).getAttribute('aria-controls')
+  await page.locator('.print-settings .el-select').filter({ has: page.locator(select) }).click()
+  const choice = page.locator(`[id="${listbox}"]`).getByRole('option', { name: option, exact: typeof option === 'string' })
+  await expect(choice).toBeVisible()
+  await choice.click()
+  await expect(page.locator(`[id="${listbox}"]`)).toBeHidden()
+}
+
+// Element Plus keeps the native radio and switch inputs invisible.
+const pressRadio = (page: Page, name: string) =>
+  page.locator('.print-settings .el-radio-button', { hasText: name }).click()
+const toggle = (page: Page, id: string) => page.locator(`.print-settings label[for="${id}"]`).click()
+
+test.describe('Paged print preview', () => {
   test.setTimeout(120000)
   let app: ElectronApplication
   let page: Page
@@ -159,43 +229,33 @@ test.describe('Print preview with Chromium pagination', () => {
     if (output) fs.rmSync(output, { recursive: true, force: true })
   })
 
-  test('previews every real PDF page, saves the same pixels, and prints the same pagination', async() => {
-    const data = await savePdf(app, page, path.join(output, 'preview.pdf'))
-    const pages = await readPdf(data)
+  test('saves and prints exactly the previewed pages, at 300 dpi', async() => {
+    const pages = await readPdf(await savePdf(app, page, path.join(output, 'preview.pdf')))
+    expect(pages.length).toBeGreaterThan(2)
+    await expectSamePages(page, pages)
+    const text = pages.map((p) => p.text).join('')
+    expect(text).toContain('const longLine')
+    // CJK and the typeset formula reach the PDF as text.
+    expect(text).toContain('中文分')
+    expect(text).toContain('dx')
+    expect(pages[0].width).toBeCloseTo((210 / 25.4) * 72, 0)
+    expect(pages[0].height).toBeCloseTo((297 / 25.4) * 72, 0)
+
     for (const value of ['0', '999', '']) {
       await page.locator('.page-counter input').fill(value)
       await page.locator('.page-counter input').press('Tab')
       await expect(page.locator('.preview-message')).toHaveCount(0)
-      await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeEnabled()
     }
-    expect(pages.length).toBeGreaterThan(2)
-    expect(pages.map((p) => p.text).join('')).toContain('中文分')
-    expect(pages.map((p) => p.text).join('')).toContain('const longLine')
-    expect(pages.map((p) => p.text).join('')).toContain('dx')
-    expect(pages[0].width).toBeCloseTo((210 / 25.4) * 72, 0)
-    expect(pages[0].height).toBeCloseTo((297 / 25.4) * 72, 0)
-    const previewImages: string[] = []
-    for (let i = 1; i <= pages.length; i++) {
-      await page.locator('.page-counter input').fill(String(i))
-      await page.locator('.page-counter input').press('Tab')
-      await page.waitForTimeout(100)
-      const pixels = await page
-        .locator('.page-sheet canvas')
-        .evaluate((el) => (el as HTMLCanvasElement).toDataURL())
-      previewImages.push(pixels)
-    }
-    expect(new Set(previewImages).size).toBe(pages.length)
-    const before = page.locator('.print-preview').getAttribute('data-revision')
+    // Zooming only magnifies the sheets: no new layout, so no new PDF.
+    const calls = await getState(app, 'pdfCalls')
     await page.getByRole('combobox', { name: 'Preview zoom' }).selectOption('150')
-    await expect(page.locator('.print-preview')).toHaveAttribute('data-revision', (await before)!)
-    const zoomedPdf = await savePdf(app, page, path.join(output, 'zoomed.pdf'))
-    expect(zoomedPdf.equals(data)).toBe(true)
+    const zoomed = await readPdf(await savePdf(app, page, path.join(output, 'zoomed.pdf')))
+    expect(zoomed).toEqual(pages)
+    expect(await getState(app, 'pdfCalls')).toBe(calls)
 
     await page.getByRole('button', { name: 'Print', exact: true }).click()
     await expect(page.locator('.action-message')).toContainText('canceled', { timeout: 60000 })
-    const jobs = await app.evaluate(
-      () => (global as unknown as { printJobs: CapturedJob[] }).printJobs
-    )
+    const jobs = await getState(app, 'printJobs')
     expect(jobs).toHaveLength(1)
     expect(jobs[0].options).toMatchObject({
       silent: true,
@@ -203,86 +263,18 @@ test.describe('Print preview with Chromium pagination', () => {
       pageSize: { width: 210000, height: 297000 },
       margins: { marginType: 'none' }
     })
+    // One full-page raster per sheet; no document text is laid out again.
     const printed = await readPdf(Buffer.from(jobs[0].pdf))
     expect(printed.length).toBe(pages.length)
-    for (const sheet of printed) {
-      expect(sheet.width).toBeCloseTo(pages[0].width, 1)
-      expect(sheet.height).toBeCloseTo(pages[0].height, 1)
+    expect(jobs[0].images).toHaveLength(pages.length)
+    expect(printed.every((p) => p.text === '')).toBe(true)
+    for (const [number, source] of jobs[0].images.entries()) {
+      const staged = fs.readFileSync(fileURLToPath(source))
+      expect(staged.subarray(0, 8).toString('hex'), `page ${number + 1}`).toBe('89504e470d0a1a0a')
+      // Chromium rounds the page box to whole CSS pixels.
+      expect(Math.abs(staged.readUInt32BE(16) - (210 / 25.4) * 300)).toBeLessThan(4)
+      expect(Math.abs(staged.readUInt32BE(20) - (297 / 25.4) * 300)).toBeLessThan(4)
     }
-    const { getDocument, OPS, ImageKind, Util } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-    const { loadImage } = await import('@napi-rs/canvas')
-    const printedDoc = await getDocument({ data: Uint8Array.from(jobs[0].pdf) }).promise
-    const factory = printedDoc.canvasFactory as {
-      create(
-        width: number,
-        height: number
-      ): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }
-      destroy(target: { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }): void
-    }
-    for (let number = 1; number <= pages.length; number++) {
-      const printPage = await printedDoc.getPage(number)
-      const staged = fs.readFileSync(fileURLToPath(jobs[0].images[number - 1]))
-      expect(staged.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
-      expect(staged.readUInt32BE(16)).toBeGreaterThan(2400)
-      const operators = await printPage.getOperatorList()
-      const images = operators.fnArray.flatMap((op, i) =>
-        op === OPS.paintImageXObject ? [operators.argsArray[i][0] as string] : []
-      )
-      expect(images, `Page ${number}: one immutable sheet`).toHaveLength(1)
-      let matrix = [1, 0, 0, 1, 0, 0]
-      const stack: number[][] = []
-      for (let i = 0; i < operators.fnArray.length; i++) {
-        const op = operators.fnArray[i]
-        if (op === OPS.save) stack.push(matrix.slice())
-        if (op === OPS.restore) matrix = stack.pop()!
-        if (op === OPS.transform) matrix = Util.transform(matrix, operators.argsArray[i])
-        if (op === OPS.paintImageXObject) {
-          const corners = [
-            [0, 0],
-            [0, 1],
-            [1, 0],
-            [1, 1]
-          ].map(([x, y]) => [
-            matrix[0] * x + matrix[2] * y + matrix[4],
-            matrix[1] * x + matrix[3] * y + matrix[5]
-          ])
-          expect(Math.min(...corners.map((p) => p[0]))).toBeCloseTo(0, 0)
-          expect(Math.min(...corners.map((p) => p[1]))).toBeCloseTo(0, 0)
-          // Chromium rounds the physical sheet's CSS dimensions to device pixels.
-          expect(Math.abs(Math.max(...corners.map((p) => p[0])) - printPage.view[2])).toBeLessThanOrEqual(72 / 96)
-          expect(Math.abs(Math.max(...corners.map((p) => p[1])) - printPage.view[3])).toBeLessThanOrEqual(72 / 96)
-        }
-      }
-      const embedded = await new Promise<{
-        width: number
-        height: number
-        kind: number
-        data: Uint8Array
-      }>((resolve) => {
-        printPage.objs.get(images[0], resolve)
-      })
-      expect(embedded.width).toBe(staged.readUInt32BE(16))
-      expect(embedded.height).toBe(staged.readUInt32BE(20))
-      expect(embedded.kind).toBe(ImageKind.RGB_24BPP)
-      const source = factory.create(embedded.width, embedded.height)
-      source.context.drawImage((await loadImage(staged)) as unknown as CanvasImageSource, 0, 0)
-      const rgba = source.context.getImageData(0, 0, embedded.width, embedded.height).data
-      const rgb = new Uint8Array(embedded.width * embedded.height * 3)
-      for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
-        rgb[j] = rgba[i]
-        rgb[j + 1] = rgba[i + 1]
-        rgb[j + 2] = rgba[i + 2]
-      }
-      expect(
-        Buffer.from(embedded.data).equals(Buffer.from(rgb)),
-        `Page ${number}: every 300 dpi pixel survives print composition`
-      ).toBe(true)
-      console.log(
-        `Print page ${number}: ${embedded.width} × ${embedded.height}, all pixels identical`
-      )
-      factory.destroy(source)
-    }
-    await printedDoc.destroy()
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.locator('.print-preview')).toHaveCount(0)
     await expect
@@ -290,7 +282,23 @@ test.describe('Print preview with Chromium pagination', () => {
       .toBe(true)
   })
 
-  test('changes paper, orientation and margins; editor camera never changes pagination', async() => {
+  test('re-lays out the preview live and generates the PDF only once it settles', async() => {
+    // The first layout's PDF, generated in the background once it settled.
+    await expect.poll(() => getState(app, 'pdfCalls'), { timeout: 15000 }).toBe(1)
+    const before = await previewPageCount(page)
+    const slider = page.locator('.print-settings .el-slider__button-wrapper').first()
+    await slider.focus()
+    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft')
+    await expect.poll(() => previewPageCount(page)).toBeLessThan(before)
+    await waitReady(page)
+    // One more PDF for the settled layout, none for the steps on the way.
+    await expect.poll(() => getState(app, 'pdfCalls'), { timeout: 15000 }).toBe(2)
+    const pages = await readPdf(await savePdf(app, page, path.join(output, 'scaled.pdf')))
+    expect(await getState(app, 'pdfCalls')).toBe(2)
+    await expectSamePages(page, pages)
+  })
+
+  test('changes paper, orientation and margins; the editor camera never changes pagination', async() => {
     const baseline = await readPdf(await savePdf(app, page, path.join(output, 'baseline.pdf')))
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.locator('.print-preview-dialog')).toBeHidden()
@@ -305,54 +313,50 @@ test.describe('Print preview with Chromium pagination', () => {
       .toBeCloseTo(2, 5)
     await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
     await waitReady(page)
-    const zoomed = await readPdf(await savePdf(app, page, path.join(output, 'editor-zoom.pdf')))
-    expect(zoomed).toEqual(baseline)
-    await page.locator('.print-preview-dialog .page-size-select .el-select').click()
-    await page.getByRole('option', { name: /^A5 / }).click()
+    expect(await readPdf(await savePdf(app, page, path.join(output, 'editor-zoom.pdf')))).toEqual(baseline)
+
+    await choose(page, '#print-paper', /^A5 /)
     await waitReady(page)
     const a5 = await readPdf(await savePdf(app, page, path.join(output, 'a5.pdf')))
     expect(a5[0].width).toBeCloseTo((148 / 25.4) * 72, 0)
     expect(a5.length).toBeGreaterThan(baseline.length)
-    await page.locator('#pane-page .el-switch').click()
+    await expectSamePages(page, a5)
+
+    await pressRadio(page, 'Landscape')
     await waitReady(page)
     const landscape = await readPdf(await savePdf(app, page, path.join(output, 'landscape.pdf')))
     expect(landscape[0].width).toBeCloseTo((210 / 25.4) * 72, 0)
     expect(landscape[0].height).toBeCloseTo((148 / 25.4) * 72, 0)
-    const margins = page.locator('#pane-page .row .el-input-number input')
-    await margins.nth(2).fill('40')
-    await margins.nth(2).press('Tab')
+
+    await choose(page, '#print-margins', 'Narrow')
     await waitReady(page)
-    const margin = await readPdf(await savePdf(app, page, path.join(output, 'margin.pdf')))
-    expect(margin).not.toEqual(landscape)
+    const narrow = await readPdf(await savePdf(app, page, path.join(output, 'narrow.pdf')))
+    expect(narrow.length).toBeLessThan(landscape.length)
+    await expectSamePages(page, narrow)
   })
 
-  test('handles generation failure, save cancellation, printer failure, and reopening', async() => {
+  test('reports a failed PDF, a canceled save and an offline printer, and reopens cleanly', async() => {
     await app.evaluate(({ dialog }) => {
       dialog.showSaveDialog = async() => ({ canceled: true, filePath: '' })
     })
     await page.getByRole('button', { name: 'Save PDF', exact: true }).click()
     await expect(page.locator('.action-message')).toContainText('canceled')
-    await app.evaluate(() => {
-      ;(global as unknown as { printResult: string }).printResult = 'fail'
-    })
+    await setState(app, { printResult: 'fail' })
     await page.getByRole('button', { name: 'Print', exact: true }).click()
-    await expect(page.locator('.action-message')).toContainText('Test printer offline', {
-      timeout: 60000
-    })
+    await expect(page.locator('.action-message')).toContainText('Test printer offline', { timeout: 60000 })
     await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled()
-    await app.evaluate(() => {
-      ;(global as unknown as { failRender: boolean }).failRender = true
-    })
-    await page.locator('#pane-page .el-switch').click()
-    await expect(page.locator('.preview-message')).toContainText('Injected PDF rendering failure', {
-      timeout: 30000
-    })
-    await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeDisabled()
-    await app.evaluate(() => {
-      ;(global as unknown as { failRender: boolean }).failRender = false
-    })
-    await page.getByRole('button', { name: 'Try again' }).click()
+
+    await setState(app, { failRender: true })
+    await pressRadio(page, 'Landscape')
     await waitReady(page)
+    await page.getByRole('button', { name: 'Save PDF', exact: true }).click()
+    await expect(page.locator('.action-message')).toContainText('Injected PDF rendering failure', { timeout: 30000 })
+    // The preview itself never depended on the PDF.
+    await expect(page.locator('.print-preview[data-ready]')).toHaveCount(1)
+    await setState(app, { failRender: false })
+    const pages = await readPdf(await savePdf(app, page, path.join(output, 'retry.pdf')))
+    await expectSamePages(page, pages)
+
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
     await waitReady(page)
@@ -362,40 +366,32 @@ test.describe('Print preview with Chromium pagination', () => {
   })
 
   test('validates custom paper and margins, then submits the selected copies', async() => {
-    await page.locator('.page-size-select .el-select').click()
-    await page.getByRole('option', { name: 'Custom', exact: true }).click()
-    const values = page.locator('#pane-page .row .el-input-number input')
-    for (const [index, value] of [
-      [0, '190'],
-      [1, '250']
-    ] as const) {
-      await values.nth(index).fill(value)
-      await values.nth(index).press('Tab')
-    }
+    await choose(page, '#print-paper', 'Custom')
+    await page.getByRole('spinbutton', { name: 'Width' }).fill('190')
+    await page.getByRole('spinbutton', { name: 'Width' }).press('Tab')
+    await page.getByRole('spinbutton', { name: 'Height' }).fill('250')
+    await page.getByRole('spinbutton', { name: 'Height' }).press('Tab')
     await waitReady(page)
-    await values.nth(4).fill('100')
-    await values.nth(4).press('Tab')
-    await values.nth(5).fill('100')
-    await values.nth(5).press('Tab')
+    await choose(page, '#print-margins', 'Custom')
+    for (const side of ['Right (mm)', 'Left (mm)']) {
+      await page.getByRole('spinbutton', { name: side }).fill('100')
+      await page.getByRole('spinbutton', { name: side }).press('Tab')
+    }
     await expect(page.locator('.preview-message')).toContainText('20 mm')
     await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeDisabled()
-    await values.nth(4).fill('20')
-    await values.nth(4).press('Tab')
-    await values.nth(5).fill('20')
-    await values.nth(5).press('Tab')
+    for (const side of ['Right (mm)', 'Left (mm)']) {
+      await page.getByRole('spinbutton', { name: side }).fill('20')
+      await page.getByRole('spinbutton', { name: side }).press('Tab')
+    }
     await waitReady(page)
     const custom = await readPdf(await savePdf(app, page, path.join(output, 'custom.pdf')))
     expect(custom[0].width).toBeCloseTo((190 / 25.4) * 72, 0)
     expect(custom[0].height).toBeCloseTo((250 / 25.4) * 72, 0)
     await page.getByRole('spinbutton', { name: 'Copies', exact: true }).fill('2')
-    await app.evaluate(() => {
-      ;(global as unknown as { printResult: string }).printResult = 'success'
-    })
+    await setState(app, { printResult: 'success' })
     await page.getByRole('button', { name: 'Print', exact: true }).click()
     await expect(page.locator('.print-preview-dialog')).toBeHidden({ timeout: 60000 })
-    const jobs = await app.evaluate(
-      () => (global as unknown as { printJobs: CapturedJob[] }).printJobs
-    )
+    const jobs = await getState(app, 'printJobs')
     expect(jobs).toHaveLength(1)
     expect(jobs[0].options).toMatchObject({
       deviceName: 'Preview test device',
@@ -413,12 +409,10 @@ test.describe('Print preview with Chromium pagination', () => {
 
   test('cancels page preparation before any job is submitted', async() => {
     await page.getByRole('button', { name: 'Print', exact: true }).click()
-    await expect(page.getByRole('button', { name: /Preparing/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Preparing/ })).toBeVisible({ timeout: 30000 })
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(page.locator('.action-message')).toContainText('canceled', { timeout: 30000 })
-    expect(
-      await app.evaluate(() => (global as unknown as { printJobs: CapturedJob[] }).printJobs)
-    ).toHaveLength(0)
+    expect(await getState(app, 'printJobs')).toHaveLength(0)
     await expect(page.getByRole('button', { name: 'Print', exact: true })).toBeEnabled()
     await app.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].webContents.getPrintersAsync = async() => [] })
     await page.getByRole('button', { name: 'Refresh printers' }).click()
@@ -426,52 +420,51 @@ test.describe('Print preview with Chromium pagination', () => {
     await expect(page.getByRole('button', { name: 'Save PDF', exact: true })).toBeEnabled()
   })
 
-  test('reflects font, theme, header, footer and TOC settings in the saved pages', async() => {
+  test('prints the running header, page numbers, fonts, theme and contents title it previews', async() => {
     const baseline = await readPdf(await savePdf(app, page, path.join(output, 'baseline.pdf')))
-    await page.locator('#tab-style').click()
-    const overwrite = page.locator('#pane-style .el-switch').first()
-    if (await overwrite.getAttribute('aria-checked') !== 'true') await overwrite.click()
-    await page.locator('#pane-style').getByRole('slider').first().press('End')
+    await toggle(page, 'print-font-overwrite')
+    await page.locator('.print-settings .el-slider__button-wrapper').nth(3).focus()
+    await page.keyboard.press('End')
     await waitReady(page)
     const larger = await readPdf(await savePdf(app, page, path.join(output, 'font.pdf')))
-    expect(Math.max(...larger.flatMap(p => p.positions.map(position => Math.abs(position[0]))))).toBeGreaterThan(
-      Math.max(...baseline.flatMap(p => p.positions.map(position => Math.abs(position[0])))) * 1.5
-    )
-    await page.locator('#tab-theme').click()
-    await page.locator('#pane-theme .el-select').click()
-    await page.getByRole('option', { name: /Academic/ }).click()
+    expect(larger.length).toBeGreaterThan(baseline.length)
+    await expectSamePages(page, larger)
+
+    const headingFont = () =>
+      page.locator('.preview-frame').evaluate((frame) => {
+        const doc = (frame as HTMLIFrameElement).contentDocument!
+        return doc.defaultView!.getComputedStyle(doc.querySelector('article.markdown-body h1')!).fontFamily
+      })
+    const githubFont = await headingFont()
+    await choose(page, '#print-theme', /Academic/)
     await waitReady(page)
-    const academic = await readPdf(await savePdf(app, page, path.join(output, 'academic.pdf')))
-    expect(academic).not.toEqual(larger)
-    await page.locator('#tab-header').click()
-    for (const index of [0, 1]) {
-      const select = page.locator('#pane-header .el-select').nth(index)
-      await select.click()
-      const optionsId = await select.getByRole('combobox').getAttribute('aria-controls')
-      await page.locator(`[id="${optionsId}"]`).getByRole('option', { name: /Single cell/i }).click()
-    }
-    await page.locator('#pane-header .pref-text-box-item input').nth(0).fill('Preview header')
-    await page.locator('#pane-header .pref-text-box-item input').nth(1).fill('Preview footer')
-    await page.locator('#tab-toc').click()
-    await page.locator('#pane-toc .pref-text-box-item input').fill('Preview contents')
+    expect(await headingFont()).not.toBe(githubFont)
+    await page.getByRole('textbox', { name: 'Header Center' }).fill('Preview header')
+    await page.getByRole('button', { name: 'Add page numbers' }).click()
+    await page.getByRole('textbox', { name: 'Contents title' }).fill('Preview contents')
     await waitReady(page)
+    const sheets = page.locator('.preview-frame')
+    const count = await previewPageCount(page)
+    expect(await sheets.evaluate((frame) =>
+      (frame as HTMLIFrameElement).contentDocument!.querySelector('.mt-sheet:last-child .mt-band.bottom')?.textContent
+    )).toBe(`${count} / ${count}`)
     const configured = await readPdf(await savePdf(app, page, path.join(output, 'configured.pdf')))
-    expect(configured.map(p => p.text).join('')).toContain('Preview contents')
+    expect(configured).toHaveLength(count)
+    expect(configured.map((p) => p.text).join('')).toContain('Preview contents')
     expect(configured[0].text).toContain('Preview header')
-    expect(configured[0].text).toContain('Preview footer')
-    expect(configured[configured.length - 1].text).toContain('Preview header')
-    expect(configured[configured.length - 1].text).toContain('Preview footer')
+    expect(configured[0].text).toContain(`1 / ${count}`)
+    expect(configured[count - 1].text).toContain('Preview header')
+    expect(configured[count - 1].text).toContain(`${count} / ${count}`)
   })
 
-  test('closing during generation destroys the worker and its temporary document', async() => {
-    await app.evaluate(() => {
-      ;(global as unknown as { renderDelay: number }).renderDelay = 2000
-    })
-    await page.locator('#pane-page .el-switch').click()
-    await expect
-      .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
-      .toBe(2)
-    await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(win => /document-\d+\.html$/.test(win.webContents.getURL())))).toBe(true)
+  test('closing during background PDF generation destroys the worker and its temporary document', async() => {
+    await setState(app, { renderDelay: 3000 })
+    await pressRadio(page, 'Landscape')
+    await waitReady(page)
+    // The settled preview starts its PDF in a hidden worker window.
+    await expect.poll(() => app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().some((win) => /document-\d+\.html$/.test(win.webContents.getURL()))
+    ), { timeout: 15000 }).toBe(true)
     const sources = await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()
         .map((win) => win.webContents.getURL())
@@ -486,9 +479,7 @@ test.describe('Print preview with Chromium pagination', () => {
     await expect
       .poll(() => sources.every((source) => !fs.existsSync(fileURLToPath(source))))
       .toBe(true)
-    await app.evaluate(() => {
-      ;(global as unknown as { renderDelay: number }).renderDelay = 0
-    })
+    await setState(app, { renderDelay: 0 })
     await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
     await waitReady(page)
   })
@@ -529,5 +520,102 @@ test.describe('Print preview with Chromium pagination', () => {
       return { source: cm.getValue(), history: cm.historySize() }
     })
     expect(after).toEqual({ source, history })
+  })
+})
+
+test.describe('PDF export through the paged preview', () => {
+  test.setTimeout(120000)
+
+  test('exports the shown pages, then closes and announces the file', async() => {
+    const output = fs.mkdtempSync(path.join(os.tmpdir(), 'marktext-export-e2e-'))
+    const { app, page } = await launchWithMarkdown(markdown, {
+      suppressErrorDialog: true,
+      preferences: { language: 'en', spellcheckerEnabled: false }
+    })
+    try {
+      await sendIpcToRenderer(app, 'mt::show-export-dialog', 'pdf')
+      await waitReady(page)
+      await expect(page.getByRole('heading', { name: 'Export PDF' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Print', exact: true })).toHaveCount(0)
+      const count = await previewPageCount(page)
+      const preview = await previewPages(page)
+      const target = path.join(output, 'export.pdf')
+      await app.evaluate(({ dialog }, filePath) => {
+        dialog.showSaveDialog = async() => ({ canceled: false, filePath })
+      }, target)
+      await page.getByRole('button', { name: 'Save PDF', exact: true }).click()
+      await expect(page.locator('.print-preview-dialog')).toBeHidden({ timeout: 60000 })
+      await expect(page.locator('.mt-notification').first()).toBeVisible()
+      const pages = await readPdf(fs.readFileSync(target))
+      expect(pages).toHaveLength(count)
+      preview.forEach((text, i) => {
+        expect(pageDifference(text, pages[i].text), `page ${i + 1}`).toBeLessThanOrEqual(4)
+      })
+      await expectNoRendererErrors(app)
+    } finally {
+      await app.close()
+      fs.rmSync(output, { recursive: true, force: true })
+    }
+  })
+})
+
+const tallImage =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="2400"><rect width="400" height="2400" fill="#3a6ea5"/></svg>'
+  ).toString('base64')
+
+const withPreview = async(markdown: string, run: (app: ElectronApplication, page: Page, output: string) => Promise<void>) => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'marktext-oversized-e2e-'))
+  const { app, page } = await launchWithMarkdown(markdown, {
+    suppressErrorDialog: true,
+    preferences: { language: 'en', spellcheckerEnabled: false }
+  })
+  try {
+    await setupPrintBoundary(app)
+    await sendIpcToRenderer(app, 'mt::show-export-dialog', 'print')
+    await waitReady(page)
+    await run(app, page, output)
+    await expectNoRendererErrors(app)
+  } finally {
+    await app.close()
+    fs.rmSync(output, { recursive: true, force: true })
+  }
+}
+
+test.describe('Content taller than a page', () => {
+  test.setTimeout(120000)
+
+  test('limits a magnified image to one page and prints the previewed pages', async() => {
+    const markdown =
+      '# Tall image\n\n' + 'Text before the image. '.repeat(60) + `\n\n![Tall image](${tallImage})\n\nAfter the image.\n`
+    await withPreview(markdown, async(app, page, output) => {
+      await expectSamePages(page, await readPdf(await savePdf(app, page, path.join(output, 'image.pdf'))))
+      await page.locator('.print-settings .el-slider__button-wrapper').first().focus()
+      await page.keyboard.press('End')
+      await waitReady(page)
+      await expectSamePages(page, await readPdf(await savePdf(app, page, path.join(output, 'magnified.pdf'))))
+    })
+  })
+
+  // Print slices such a row on its own. Its pages hold slightly more than the
+  // preview's, so the PDF can come out a page shorter; it is saved anyway.
+  test('saves a table row taller than a page and reports a different page count', async() => {
+    const markdown =
+      '# Tall row\n\nIntro paragraph.\n\n| Key | Notes |\n| --- | --- |\n| short | one line |\n' +
+      `| tall | ${'A row taller than any page wraps this sentence again and again. '.repeat(260)} |\n` +
+      '| after | the row that follows |\n\nClosing paragraph.\n'
+    await withPreview(markdown, async(app, page, output) => {
+      const shown = await previewPageCount(page)
+      const preview = await previewPages(page)
+      const pages = await readPdf(await savePdf(app, page, path.join(output, 'row.pdf')))
+      expect(pages.length).toBeGreaterThanOrEqual(shown - 1)
+      expect(pages.length).toBeLessThanOrEqual(shown)
+      // Before the row, the pages are the previewed ones.
+      expect(pageDifference(preview[0], pages[0].text)).toBeLessThanOrEqual(4)
+      await expect(page.locator('.preview-caption')).toContainText(
+        pages.length === shown ? `${shown} pages` : `The PDF has ${pages.length} pages; the preview showed ${shown}.`
+      )
+    })
   })
 })

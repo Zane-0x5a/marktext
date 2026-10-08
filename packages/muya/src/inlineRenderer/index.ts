@@ -14,6 +14,8 @@ const debug = logger('inlineRenderer:');
 class InlineRenderer {
     public labels: Labels = new Map();
     public renderer: Renderer;
+    // Document revision `labels` was collected from; -1 forces the first scan.
+    private _labelsRevision = -1;
 
     constructor(public muya: Muya) {
         this.renderer = new Renderer(muya, this);
@@ -74,11 +76,16 @@ class InlineRenderer {
         domNode!.innerHTML = html;
     }
 
+    // Every content block patches through here, so a full scan per call would
+    // make rendering a document quadratic; rescan only after the state changed.
     private _collectReferenceDefinitions() {
-        const state = this.muya.editor.jsonState.getState();
+        const { jsonState } = this.muya.editor;
+        if (jsonState.revision === this._labelsRevision)
+            return;
+        this._labelsRevision = jsonState.revision;
         const labels = new Map();
 
-        const travel = (sts: TState[]) => {
+        const travel = (sts: readonly TState[]) => {
             if (Array.isArray(sts) && sts.length) {
                 for (const st of sts) {
                     if (st.name === 'paragraph') {
@@ -93,7 +100,7 @@ class InlineRenderer {
             }
         };
 
-        travel(state);
+        travel(jsonState.liveState);
 
         this.labels = labels;
     }

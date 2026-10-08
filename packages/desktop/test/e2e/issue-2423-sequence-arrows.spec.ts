@@ -5,12 +5,11 @@ import { launchWithMarkdown, waitForMenuReady, sendIpcToRenderer } from './helpe
 
 // #2423 — arrowheads vanished from sequence diagrams in exported PDFs.
 //
-// PDF export renders the document to HTML and appends it to the *live* editor
-// window as `article.print-container`, then prints that window. The editor's
-// own copy of the same diagram is still in the DOM, so any id the diagram
-// renderer hardcodes exists twice; `url(#id)` binds to the first match in tree
-// order — the editor's — which `@media print` has taken out of layout, leaving
-// the reference painting nothing.
+// The diagram renderer hardcodes marker ids, and `url(#id)` binds to the first
+// match in tree order. When the print document shared a DOM with the editor,
+// the reference bound to the editor's copy of the same diagram, which print
+// layout had removed, so it painted nothing. The paged preview lays the print
+// document out in its own frame, which is also what is printed.
 //
 // The invariant is therefore: every `url(#…)` reference inside the print
 // container must resolve to an element inside that same container.
@@ -35,37 +34,25 @@ const stubSaveDialog = async(app: ElectronApplication, targetPath: string): Prom
   }, targetPath)
 }
 
-// The print container lives for about a frame, so it has to be observed
-// rather than polled for.
-const installReferenceProbe = async(page: Page): Promise<void> => {
-  await page.evaluate(() => {
-    const w = window as unknown as { __mt_svg_refs__?: unknown }
-    const observer = new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of Array.from(record.addedNodes)) {
-          const container = node as HTMLElement
-          if (container.nodeType !== 1 || !container.classList?.contains('print-container')) {
-            continue
-          }
-          const references = new Set<string>()
-          for (const element of Array.from(container.querySelectorAll('*'))) {
-            for (const attribute of Array.from(element.attributes)) {
-              for (const match of attribute.value.matchAll(/url\(\s*['"]?#([^)'"\s]+)/g)) {
-                references.add(match[1])
-              }
-            }
-          }
-          const unresolved = [...references].filter((id) => {
-            const target = document.getElementById(id)
-            return !target || !container.contains(target)
-          })
-          w.__mt_svg_refs__ = { references: [...references], unresolved }
+// The preview frame holds the print document the PDF is made from.
+const referenceReport = (page: Page): Promise<ReferenceReport> =>
+  page.locator('.preview-frame').evaluate((frame) => {
+    const doc = (frame as HTMLIFrameElement).contentDocument!
+    const container = doc.querySelector('article.print-container')!
+    const references = new Set<string>()
+    for (const element of Array.from(container.querySelectorAll('*'))) {
+      for (const attribute of Array.from(element.attributes)) {
+        for (const match of attribute.value.matchAll(/url\(\s*['"]?#([^)'"\s]+)/g)) {
+          references.add(match[1])
         }
       }
+    }
+    const unresolved = [...references].filter((id) => {
+      const target = doc.getElementById(id)
+      return !target || !container.contains(target)
     })
-    observer.observe(document.body, { childList: true })
+    return { references: [...references], unresolved }
   })
-}
 
 const pollForFile = async(filePath: string, timeoutMs = 60000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
@@ -100,24 +87,19 @@ test.describe('sequence diagram arrowheads survive PDF export (#2423)', () => {
     const target = `/tmp/marktext-e2e-2423-${Date.now()}.pdf`
     fs.rmSync(target, { force: true })
 
-    await installReferenceProbe(page)
     await stubSaveDialog(app, target)
     await sendIpcToRenderer(app, 'mt::show-export-dialog', 'pdf')
-    const confirm = page.locator('.print-settings-dialog .button-primary')
-    await confirm.waitFor({ state: 'visible', timeout: 20000 })
-    await confirm.click()
-    await pollForFile(target)
-    fs.rmSync(target, { force: true })
+    await page.locator('.print-preview[data-ready]').waitFor({ state: 'visible', timeout: 30000 })
 
-    const report = (await page.evaluate(
-      () => (window as unknown as { __mt_svg_refs__?: ReferenceReport }).__mt_svg_refs__
-    )) as ReferenceReport | undefined
-
-    expect(report, 'the print container should have been observed').toBeTruthy()
+    const report = await referenceReport(page)
     expect(
-      report!.references.length,
+      report.references.length,
       'the sequence diagram should reference its arrowhead markers'
     ).toBeGreaterThan(0)
-    expect(report!.unresolved).toEqual([])
+    expect(report.unresolved).toEqual([])
+
+    await page.locator('.print-preview .button-primary').click()
+    await pollForFile(target)
+    fs.rmSync(target, { force: true })
   })
 })

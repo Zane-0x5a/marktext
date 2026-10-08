@@ -10,6 +10,27 @@ import 'katex/dist/contrib/mhchem.mjs';
 
 const debug = logger('mathPreview:');
 
+// Switching back to a document re-creates every preview, so recently drawn
+// formulas are kept as KaTeX HTML. Invalid input throws and is not cached.
+const RENDER_CACHE_LIMIT = 1000;
+const renderCache = new Map<string, string>();
+
+function renderDisplayMath(math: string) {
+    let html = renderCache.get(math);
+    if (html === undefined) {
+        html = katex.renderToString(math, { displayMode: true });
+        if (renderCache.size >= RENDER_CACHE_LIMIT)
+            renderCache.delete(renderCache.keys().next().value!);
+    }
+    else {
+        // Re-inserted so the least recently drawn formula is evicted first.
+        renderCache.delete(math);
+    }
+    renderCache.set(math, html);
+
+    return html;
+}
+
 class MathPreview extends Parent {
     private _math: string;
 
@@ -66,10 +87,7 @@ class MathPreview extends Parent {
 
         if (math) {
             try {
-                const html = katex.renderToString(math, {
-                    displayMode: true,
-                });
-                this.domNode!.innerHTML = html;
+                this.domNode!.innerHTML = renderDisplayMath(math);
             }
             catch (err) {
                 const message = err instanceof Error ? err.message : i18n.t('Invalid Mathematical Formula');

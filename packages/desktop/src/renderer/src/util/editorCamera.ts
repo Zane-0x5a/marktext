@@ -1,13 +1,13 @@
 import './editorCamera.css'
 
-const MIN_SCALE = 0.25
+const MIN_SCALE = 1
 const MAX_SCALE = 4
 
 /**
  * A document camera with native scrolling. The layout plane keeps its original
- * width; only its DOM drawing is scaled. The clipped stage supplies the scaled
- * scroll extent, including when the document is smaller than its layout box.
- * The caller owns the document node and must destroy the camera before it.
+ * width; only its DOM drawing is magnified. The clipped stage supplies the
+ * scaled scroll extent. The caller owns the document node and must destroy the
+ * camera before it.
  */
 export class EditorCamera {
   private readonly stage = document.createElement('div')
@@ -109,29 +109,24 @@ export class EditorCamera {
     const style = getComputedStyle(this.viewport)
     const x = this.anchorX - rect.left - this.viewport.clientLeft - parseFloat(style.paddingLeft)
     const y = this.anchorY - rect.top - this.viewport.clientTop - parseFloat(style.paddingTop)
-    const offset = this.horizontalOffset()
     const rtl = style.direction === 'rtl'
-    const scrollX = this.viewport.scrollLeft + (rtl ? this.viewport.scrollWidth - this.viewport.clientWidth : 0)
-    const documentX = (scrollX + x - offset) / this.currentScale
+    const overflow = rtl ? this.viewport.scrollWidth - this.viewport.clientWidth : 0
+    const documentX = (this.viewport.scrollLeft + overflow + x) / this.currentScale
     const documentY = (this.viewport.scrollTop + y) / this.currentScale
     this.currentScale = this.targetScale
     this.draw()
-    const nextScrollX = documentX * this.currentScale + this.horizontalOffset() - x
-    this.viewport.scrollLeft = nextScrollX - (rtl ? this.viewport.scrollWidth - this.viewport.clientWidth : 0)
+    const nextOverflow = rtl ? this.viewport.scrollWidth - this.viewport.clientWidth : 0
+    this.viewport.scrollLeft = documentX * this.currentScale - x - nextOverflow
     this.viewport.scrollTop = documentY * this.currentScale - y
   }
 
-  private horizontalOffset(): number {
-    return Math.max(0, (this.width - this.contentWidth * this.currentScale) / 2)
-  }
-
   private draw(): void {
-    this.stage.style.width = `${Math.max(this.width, this.contentWidth * this.currentScale)}px`
+    this.stage.style.width = `${this.contentWidth * this.currentScale}px`
     this.stage.style.height = `${this.contentHeight * this.currentScale}px`
     // A 2D transform lets Chromium rasterize text/SVG at the current scale.
     // Promoting the entire document with will-change/translate3d would stretch
     // cached pixels and allocate a potentially enormous layer for long files.
-    this.plane.style.transform = `translateX(${this.horizontalOffset()}px) scale(${this.currentScale})`
+    this.plane.style.transform = `scale(${this.currentScale})`
     this.viewport.dataset.editorScale = String(this.currentScale)
   }
 

@@ -24,7 +24,7 @@ const pinch = async(page: Page, factor: number, selector = '.editor-component'):
   await page.keyboard.down('Control')
   await page.mouse.wheel(0, -Math.log(factor) / 0.01)
   await page.keyboard.up('Control')
-  await expect.poll(() => readScale(page, selector)).toBeCloseTo(Math.min(4, Math.max(0.25, before * factor)), 5)
+  await expect.poll(() => readScale(page, selector)).toBeCloseTo(Math.min(4, Math.max(1, before * factor)), 5)
 }
 
 const layoutSnapshot = (page: Page) => page.evaluate(() => {
@@ -87,7 +87,7 @@ test.describe('Document camera pinch', () => {
     }
   })
 
-  for (const factor of [0.5, 2]) {
+  for (const factor of [1.5, 3]) {
     test(`resizes images in document coordinates at ${factor}x camera scale`, async() => {
       const uri = 'data:image/svg+xml;base64,' + Buffer.from(
         '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#21b56f"/></svg>'
@@ -113,14 +113,14 @@ test.describe('Document camera pinch', () => {
     })
   }
 
-  test('keeps arrow navigation inside wrapped paragraphs at 25% camera scale', async() => {
+  test('keeps arrow navigation inside wrapped paragraphs at 400% camera scale', async() => {
     await setSourceMarkdown(page, app, 'aaaa bbbb cccc dddd eeee ffff gggg hhhh\n\nNext paragraph.\n')
     await page.evaluate(() => {
       const paragraph = document.querySelector<HTMLElement>('.mu-paragraph')
       if (!paragraph) throw new Error('Paragraph is missing')
       paragraph.style.width = '130px'
     })
-    await pinch(page, 0.25)
+    await pinch(page, 4)
     await page.evaluate(() => {
       const paragraph = document.querySelector('.mu-paragraph')
       const text = paragraph && document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT).nextNode()
@@ -139,7 +139,7 @@ test.describe('Document camera pinch', () => {
     )).toBe(true)
   })
 
-  for (const factor of [0.25, 0.5, 1, 2, 4]) {
+  for (const factor of [1, 1.5, 2, 4]) {
     test(`maps clicks and caret drawing to source text at ${factor}x camera scale`, async() => {
       await setSourceMarkdown(page, app, 'first line\nsecond line\nthird line\nfourth line\n')
       await enterSourceMode(page, app)
@@ -350,6 +350,16 @@ test.describe('Document camera pinch', () => {
     await pinch(page, 100)
     await expectSameLayout(page, before)
     await pinch(page, 0.0001)
+    await expectSameLayout(page, before)
+  })
+
+  test('only magnifies: zooming out stops at 100%', async() => {
+    const before = await layoutSnapshot(page)
+    await pinch(page, 0.5)
+    expect(await readScale(page)).toBe(1)
+    await pinch(page, 3)
+    await pinch(page, 0.1)
+    expect(await readScale(page)).toBe(1)
     await expectSameLayout(page, before)
   })
 

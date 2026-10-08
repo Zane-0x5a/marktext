@@ -31,7 +31,6 @@ import pandoc, {
 } from '../../utils/pandoc'
 import { t, getCurrentLanguage } from '../../i18n'
 import type { PandocExportPayload, TabOptions, UnsavedFile } from '@shared/types/files'
-import { exportPrintPdf } from '../../print/preview'
 
 type Win = BrowserWindow | null | undefined
 
@@ -90,16 +89,10 @@ const handleResponseForExport = async(e: IpcMainEvent, payload: ExportPayload): 
 
   if (filePath && !canceled) {
     try {
-      if (type === 'pdf') {
-        if (!content) throw new Error('No print document found')
-        const data = await exportPrintPdf(content)
-        await writeFile(filePath, data, extension!, 'binary')
-      } else {
-        if (!content) {
-          throw new Error('No HTML content found.')
-        }
-        await writeFile(filePath, content, extension!, 'utf8')
+      if (!content) {
+        throw new Error('No HTML content found.')
       }
+      await writeFile(filePath, content, extension!, 'utf8')
       win.webContents.send('mt::export-success', { type, filePath })
     } catch (err) {
       log.error('Error while exporting:', err)

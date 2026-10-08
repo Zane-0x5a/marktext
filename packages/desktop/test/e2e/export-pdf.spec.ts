@@ -11,11 +11,10 @@ import {
 //
 // The full path is: File › Export › Export PDF →
 //   main `exportFile()` sends `mt::show-export-dialog` →
-//   renderer export-settings dialog → confirm →
-//   renderer renders styled HTML into the hidden print webview and sends
-//   `mt::response-export` (store/editor.ts EXPORT) →
-//   main `handleResponseForExport` → showSaveDialog → webContents.printToPDF →
-//   writeFile → `mt::export-success`.
+//   renderer paged preview → "Save PDF" →
+//   the preview's pages become a forced-break print document →
+//   main `mt::print-preview::render` (webContents.printToPDF) →
+//   `mt::print-preview::save` → showSaveDialog → writeFile → `mt::export-success`.
 //
 // The native save dialog is the only non-headless seam: we stub
 // `electron.dialog.showSaveDialog` in the MAIN process to return a temp path,
@@ -97,14 +96,12 @@ const clearExportSuccesses = async(page: Page): Promise<void> => {
 }
 
 // Drive the real renderer export dialog: send the same IPC the menu item sends
-// (`mt::show-export-dialog`), wait for the export-settings dialog to render,
-// then click its primary "Export" button. That runs the renderer pipeline that
-// renders the print webview and emits `mt::response-export` to main.
+// (`mt::show-export-dialog`), wait for the paged preview, then click its
+// primary "Save PDF" button.
 const triggerPdfExportViaDialog = async(app: ElectronApplication, page: Page): Promise<void> => {
   await sendIpcToRenderer(app, 'mt::show-export-dialog', 'pdf')
-  const confirm = page.locator('.print-settings-dialog .button-primary')
-  await confirm.waitFor({ state: 'visible', timeout: 10000 })
-  await confirm.click()
+  await page.locator('.print-preview[data-ready]').waitFor({ state: 'visible', timeout: 30000 })
+  await page.locator('.print-preview .button-primary').click()
 }
 
 const pollForPdfFile = async(filePath: string, timeoutMs = 20000): Promise<Buffer> => {
@@ -179,7 +176,7 @@ test.describe('PDF export to a real file (item 231)', () => {
     const out = '/tmp/marktext-e2e-export-' + Date.now() + '-c.pdf'
     if (fs.existsSync(out)) fs.rmSync(out)
     await clearExportSuccesses(page)
-    // Stub the save dialog to report cancellation — main must skip printToPDF.
+    // Stub the save dialog to report cancellation — nothing may be written.
     await app.evaluate(({ dialog }) => {
       ;(dialog as unknown as { showSaveDialog: unknown }).showSaveDialog = async() => ({
         canceled: true,
@@ -189,17 +186,19 @@ test.describe('PDF export to a real file (item 231)', () => {
 
     await triggerPdfExportViaDialog(app, page)
 
-    // Give main a generous window to (not) write the file.
-    await page.waitForTimeout(2000)
+    await expect(page.locator('.print-preview .action-message')).toBeVisible({ timeout: 30000 })
 
     expect(fs.existsSync(out)).toBe(false)
     const successes = await getExportSuccesses(page)
     expect(successes.find((s) => s.filePath === out)).toBeFalsy()
+    // A canceled save leaves the preview open.
+    await page.locator('.print-preview .preview-actions > button').click()
+    await expect(page.locator('.print-preview')).toHaveCount(0)
   })
 
   test('the renderer EXPORT path round-trips a second export to a fresh path', async() => {
-    // Re-export to a different path to prove the print service is re-armed and
-    // the wiring is not single-shot.
+    // Re-export to a different path to prove the preview session is re-armed
+    // and the wiring is not single-shot.
     const out = '/tmp/marktext-e2e-export-' + Date.now() + '-d.pdf'
     if (fs.existsSync(out)) fs.rmSync(out)
     await clearExportSuccesses(page)
