@@ -213,7 +213,8 @@
       "closeAllTabs": "Alle tabbladen sluiten",
       "rename": "Hernoemen",
       "copyPath": "Pad kopiëren",
-      "showInFolder": "Tonen in map"
+      "showInFolder": "Tonen in map",
+      "showInSideBar": "Tonen in zijbalk"
     }
   },
   "search": {
@@ -417,6 +418,9 @@
         "texMathGfm": "Pandocs markdown-extensie tex_math_gfm inschakelen",
         "texMathSingleBackslash": "Pandocs markdown-extensie tex_math_single_backslash inschakelen",
         "texMathDoubleBackslash": "Pandocs markdown-extensie tex_math_double_backslash inschakelen",
+        "highlightSyntax": "De niet-standaard ==tekst==-markeringssyntaxis inschakelen",
+        "inlineDiff": "De niet-standaard inline-diff-syntaxis {+ … +} / [- … -] inschakelen",
+        "multilineBlockquote": "De niet-standaard meerregelige citaatsyntaxis >>> … >>> inschakelen",
         "isHtmlEnabled": "HTML-weergave inschakelen",
         "softNewlineAsSpace": "Zachte regeleinden als spaties behandelen",
         "sequenceTheme": "Sequentiediagram thema",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryName": "Naam van de relatieve afbeeldingsmap",
         "autoNormalizeLineEndings": "Regeleindes automatisch normaliseren bij het openen van bestanden. Indien uitgeschakeld worden bestanden ongewijzigd geopend.",
         "fileSortOrder": "Sorteervolgorde voor bestanden in geopende mappen: oplopend of aflopend.",
-        "openedFilesInSidebar": "Geopende bestanden tonen in de zijbalk."
+        "openedFilesInSidebar": "Geopende bestanden tonen in de zijbalk.",
+        "showPandocConvert": "Het Pandoc-conversiemenu tonen. Vereist een installatie van Pandoc."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Map selecteren",
         "openBlankPage": "Lege pagina openen"
       },
+      "pandoc": {
+        "title": "Pandoc-conversie",
+        "description": "Het Pandoc-conversiemenu tonen",
+        "detailedDescription": "Vereist een installatie van Pandoc",
+        "found": "Gevonden: {path}",
+        "notFound": "Niet gevonden",
+        "recheck": "Opnieuw controleren"
+      },
       "sidebar": {
         "title": "Zijbalk",
         "wrapTextInToc": "Tekstterugloop in inhoudsopgave",
         "showOpenedFiles": "Geopende bestanden tonen",
+        "autoReveal": "Actief bestand tonen in de zijbalk",
         "excludePatterns": "Uitsluitpatronen",
         "excludePatternsNotes": "Uitsluitpatronen (opmerkingen)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub TeX-wiskunde ($`…`$ en ```math)",
         "texMathSingleBackslash": "TeX-wiskunde met enkele backslash",
         "texMathDoubleBackslash": "TeX-wiskunde met dubbele backslash",
+        "highlightSyntax": "Markeren (==tekst==)",
+        "inlineDiff": "Inline diff ({+ … +})",
+        "multilineBlockquote": "Meerregelig citaat (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON met accolades",
           "jsonSemicolon": "JSON met puntkomma",
@@ -777,6 +794,7 @@
       "quit": "Afsluiten",
       "toggleAutoSave": "Automatisch opslaan in-/uitschakelen",
       "importFile": "Bestand importeren",
+      "revealInSideBar": "Tonen in zijbalk",
       "exportFile": "Bestand exporteren",
       "exportFilePdf": "Exporteren als PDF",
       "zoom": "Zoom",

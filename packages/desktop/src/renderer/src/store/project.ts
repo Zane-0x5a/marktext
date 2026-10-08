@@ -1,6 +1,14 @@
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { addFile, unlinkFile, addDirectory, unlinkDirectory, resortTree, updateFileMtime } from './treeCtrl'
+import {
+  addFile,
+  unlinkFile,
+  addDirectory,
+  unlinkDirectory,
+  resortTree,
+  updateFileMtime,
+  expandAncestors
+} from './treeCtrl'
 import { usePreferencesStore } from './preferences'
 import bus from '../bus'
 import { create, paste, rename, type FileCreateType, type PasteOptions } from '../util/fileSystem'
@@ -10,7 +18,7 @@ import { getFileStateFromData } from './help'
 import { useLayoutStore } from './layout'
 import { useEditorStore } from './editor'
 import { debouncedSendBufferedState } from './bufferedState'
-import type { TreeNode } from '../components/sideBar/types'
+import type { TreeNode, TreeFolderNode } from '../components/sideBar/types'
 import type { FileChangeDetail } from '@shared/types/files'
 
 type ProjectTree = TreeNode
@@ -86,6 +94,7 @@ export const useProjectStore = defineStore('project', () => {
   const nameInputValue = ref<string>('')
   const clipboard = ref<ClipboardEntry | null>(null)
   const projectTree = ref<ProjectTree | null>(null)
+  const treeVersion = ref(0)
   const pendingTreeEvents = ref<PendingEvent[]>([])
 
   const preferencesStore = usePreferencesStore()
@@ -201,11 +210,31 @@ export const useProjectStore = defineStore('project', () => {
         }
         break
     }
+
+    // The mutations above are in place, so watchers need a counter to react to.
+    treeVersion.value++
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function CHANGE_ACTIVE_ITEM(item: any): void {
     activeItem.value = item
+  }
+
+  /** Expands the folders leading to `pathname`; false when it is not in the tree. */
+  function REVEAL_PATH(pathname: string | null | undefined): boolean {
+    if (!pathname || !projectTree.value) return false
+    return expandAncestors(projectTree.value, pathname) !== null
+  }
+
+  function REVEAL_FILE_IN_SIDE_BAR(pathname?: string | null): void {
+    const editorStore = useEditorStore()
+    const target = pathname ?? editorStore.currentFile?.pathname
+    if (!target) return
+
+    const layoutStore = useLayoutStore()
+    layoutStore.SET_LAYOUT({ showSideBar: true, rightColumn: 'files' })
+    // The tree mounts on the next flush, so the row cannot be found before it.
+    nextTick(() => bus.emit('SIDEBAR::reveal-path', target))
   }
 
   function CHANGE_CLIPBOARD(data: ClipboardEntry | null): void {
@@ -233,6 +262,10 @@ export const useProjectStore = defineStore('project', () => {
     else CLEAR_NAME_INPUT_STATE()
   }
 
+  function SET_FOLDER_COLLAPSED(folder: TreeFolderNode, isCollapsed: boolean): void {
+    folder.isCollapsed = isCollapsed
+  }
+
   function ASK_FOR_OPEN_PROJECT(): void {
     window.electron.ipcRenderer.send('mt::ask-for-open-project-in-sidebar')
   }
@@ -241,6 +274,9 @@ export const useProjectStore = defineStore('project', () => {
     bus.on('SIDEBAR::show-in-folder', () => {
       const { pathname } = activeItem.value
       window.electron.shell.showItemInFolder(pathname)
+    })
+    bus.on('SIDEBAR::reveal-file', (pathname: unknown) => {
+      REVEAL_FILE_IN_SIDE_BAR(typeof pathname === 'string' ? pathname : null)
     })
     bus.on('SIDEBAR::new', (type: unknown) => {
       const { pathname, isDirectory } = activeItem.value
@@ -415,6 +451,7 @@ export const useProjectStore = defineStore('project', () => {
     nameInputValue,
     clipboard,
     projectTree,
+    treeVersion,
     pendingTreeEvents,
     OPEN_PROJECT,
     CREATE_BUFFERED_STATE,
@@ -422,9 +459,12 @@ export const useProjectStore = defineStore('project', () => {
     LISTEN_FOR_LOAD_PROJECT,
     LISTEN_FOR_UPDATE_PROJECT,
     CHANGE_ACTIVE_ITEM,
+    REVEAL_PATH,
+    REVEAL_FILE_IN_SIDE_BAR,
     CHANGE_CLIPBOARD,
     CLEAR_NAME_INPUT_STATE,
     COMMIT_NAME_INPUT,
+    SET_FOLDER_COLLAPSED,
     ASK_FOR_OPEN_PROJECT,
     LISTEN_FOR_SIDEBAR_CONTEXT_MENU,
     CREATE_FILE_DIRECTORY,

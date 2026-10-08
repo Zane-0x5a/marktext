@@ -133,6 +133,7 @@ const PARSE_AFFECTING_OPTIONS = new Set<keyof IMuyaOptions>([
     'footnote',
     'frontMatter',
     'trimUnnecessaryCodeBlockEmptyLines',
+    'multilineBlockquote',
 ]);
 
 function endpointPair(
@@ -366,6 +367,8 @@ export class Muya {
     private _forceRender() {
         const selection = this.editor.selection.getSelection();
         this.editor.scrollPage?.updateState(this.getState());
+
+        this.editor.searchModule.refresh();
 
         if (selection && selection.isSelectionInSameBlock) {
             const begin = Math.min(selection.anchor.offset, selection.focus.offset);

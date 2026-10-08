@@ -122,6 +122,7 @@ export interface TocEntry {
   id?: string
   lvl: number
   content: string
+  contentHtml?: string
   slug?: string
 }
 
@@ -166,9 +167,10 @@ const generateHtmlToc = (
   }
 
   const shifted = tocList.shift() as TocEntry
-  const { content, lvl, slug } = shifted
+  const { content, contentHtml, lvl, slug } = shifted
 
-  let html = `<li><span><a class="toc-h${lvl}" href="#${slug}">${content}</a><span class="dots"></span></span>`
+  const label = contentHtml ?? content
+  let html = `<li><span><a class="toc-h${lvl}" href="#${slug}">${label}</a><span class="dots"></span></span>`
 
   // Generate sub-items
   if (tocList.length !== 0 && tocList[0].lvl > lvl) {

@@ -213,7 +213,8 @@
       "closeAllTabs": "모든 탭 닫기",
       "rename": "이름 바꾸기",
       "copyPath": "경로 복사",
-      "showInFolder": "폴더에서 보기"
+      "showInFolder": "폴더에서 보기",
+      "showInSideBar": "사이드바에서 보기"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "Pandoc의 markdown 확장 tex_math_gfm 활성화",
         "texMathSingleBackslash": "Pandoc의 markdown 확장 tex_math_single_backslash 활성화",
         "texMathDoubleBackslash": "Pandoc의 markdown 확장 tex_math_double_backslash 활성화",
+        "highlightSyntax": "비표준 ==텍스트== 강조 구문을 사용합니다",
+        "inlineDiff": "비표준 인라인 diff 구문 {+ … +} / [- … -]을 사용합니다",
+        "multilineBlockquote": "비표준 여러 줄 인용 구문 >>> … >>>을 사용합니다",
         "isHtmlEnabled": "HTML 렌더링 활성화",
         "softNewlineAsSpace": "소프트 줄바꿈을 공백으로 처리",
         "sequenceTheme": "시퀀스 다이어그램 테마",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "상대 이미지가 복사되는 위치",
         "imageRelativeDirectoryName": "상대 이미지 폴더 이름",
         "fileSortOrder": "열린 폴더의 파일 정렬 순서: 오름차순 또는 내림차순",
-        "openedFilesInSidebar": "사이드바에 열린 파일을 표시할지 여부"
+        "openedFilesInSidebar": "사이드바에 열린 파일을 표시할지 여부",
+        "showPandocConvert": "Pandoc 변환 메뉴를 표시합니다. Pandoc이 설치되어 있어야 합니다."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "폴더 선택",
         "openBlankPage": "빈 페이지 열기"
       },
+      "pandoc": {
+        "title": "Pandoc 변환",
+        "description": "Pandoc 변환 메뉴 표시",
+        "detailedDescription": "Pandoc이 설치되어 있어야 합니다",
+        "found": "찾음: {path}",
+        "notFound": "찾을 수 없음",
+        "recheck": "다시 확인"
+      },
       "sidebar": {
         "title": "사이드바",
         "wrapTextInToc": "목차에서 텍스트 줄바꿈",
         "showOpenedFiles": "열린 파일 표시",
+        "autoReveal": "사이드바에서 활성 파일 표시",
         "excludePatterns": "제외 패턴",
         "excludePatternsNotes": "제외 패턴 (참고)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub TeX 수식($`…`$ 및 ```math)",
         "texMathSingleBackslash": "단일 백슬래시 TeX 수식",
         "texMathDoubleBackslash": "이중 백슬래시 TeX 수식",
+        "highlightSyntax": "형광펜 (==텍스트==)",
+        "inlineDiff": "인라인 diff ({+ … +})",
+        "multilineBlockquote": "여러 줄 인용 (>>>)",
         "frontmatterType": {
           "jsonBrace": "중괄호가 있는 JSON",
           "jsonSemicolon": "세미콜론이 있는 JSON",
@@ -777,6 +794,7 @@
       "quit": "종료",
       "toggleAutoSave": "자동 저장 토글",
       "importFile": "파일 가져오기",
+      "revealInSideBar": "사이드바에서 보기",
       "exportFile": "파일 내보내기",
       "exportFilePdf": "PDF로 내보내기",
       "zoom": "확대/축소",

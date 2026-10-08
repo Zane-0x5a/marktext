@@ -40,9 +40,12 @@ function buildHtmlOptions(options: Muya['options']) {
         texMathSingleBackslash,
         texMathDoubleBackslash,
         superSubScript,
+        highlightSyntax,
+        inlineDiff,
+        multilineBlockquote,
     } = options;
 
-    return { footnote, frontMatter, texMathDollars, texMathGfm, texMathSingleBackslash, texMathDoubleBackslash, superSubScript };
+    return { footnote, frontMatter, texMathDollars, texMathGfm, texMathSingleBackslash, texMathDoubleBackslash, superSubScript, highlightSyntax, inlineDiff, multilineBlockquote };
 }
 
 /**

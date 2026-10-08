@@ -213,7 +213,8 @@
       "closeAllTabs": "Закрыть все вкладки",
       "rename": "Переименовать",
       "copyPath": "Копировать путь",
-      "showInFolder": "Показать в папке"
+      "showInFolder": "Показать в папке",
+      "showInSideBar": "Показать на боковой панели"
     }
   },
   "search": {
@@ -417,6 +418,9 @@
         "texMathGfm": "Включить расширение markdown pandoc tex_math_gfm",
         "texMathSingleBackslash": "Включить расширение markdown pandoc tex_math_single_backslash",
         "texMathDoubleBackslash": "Включить расширение markdown pandoc tex_math_double_backslash",
+        "highlightSyntax": "Включить нестандартный синтаксис выделения ==текст==",
+        "inlineDiff": "Включить нестандартный синтаксис встроенного diff {+ … +} / [- … -]",
+        "multilineBlockquote": "Включить нестандартный синтаксис многострочной цитаты >>> … >>>",
         "isHtmlEnabled": "Включить рендеринг HTML",
         "softNewlineAsSpace": "Считать мягкие переносы строк пробелами",
         "sequenceTheme": "Тема диаграмм последовательностей",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryName": "Имя относительной папки изображений",
         "autoNormalizeLineEndings": "Автоматически нормализовать концы строк при открытии файлов. Если отключено, файлы открываются как есть.",
         "fileSortOrder": "Порядок сортировки файлов в открытых папках: по возрастанию или убыванию.",
-        "openedFilesInSidebar": "Показывать открытые файлы на боковой панели."
+        "openedFilesInSidebar": "Показывать открытые файлы на боковой панели.",
+        "showPandocConvert": "Показывать меню конвертации Pandoc. Требуется установленный Pandoc."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Выбрать папку",
         "openBlankPage": "Открыть пустую страницу"
       },
+      "pandoc": {
+        "title": "Конвертация Pandoc",
+        "description": "Показывать меню конвертации Pandoc",
+        "detailedDescription": "Требуется установленный Pandoc",
+        "found": "Найден: {path}",
+        "notFound": "Не найден",
+        "recheck": "Проверить снова"
+      },
       "sidebar": {
         "title": "Боковая панель",
         "wrapTextInToc": "Переносить текст в оглавлении",
         "showOpenedFiles": "Показывать открытые файлы",
+        "autoReveal": "Показывать активный файл на боковой панели",
         "excludePatterns": "Исключающие шаблоны",
         "excludePatternsNotes": "Исключающие шаблоны (примечания)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub TeX-формулы ($`…`$ и ```math)",
         "texMathSingleBackslash": "TeX-формулы с одинарным обратным слешем",
         "texMathDoubleBackslash": "TeX-формулы с двойным обратным слешем",
+        "highlightSyntax": "Выделение (==текст==)",
+        "inlineDiff": "Встроенный diff ({+ … +})",
+        "multilineBlockquote": "Многострочная цитата (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON с фигурными скобками",
           "jsonSemicolon": "JSON с точкой с запятой",
@@ -777,6 +794,7 @@
       "quit": "Выход",
       "toggleAutoSave": "Переключить автосохранение",
       "importFile": "Импортировать файл",
+      "revealInSideBar": "Показать на боковой панели",
       "exportFile": "Экспортировать файл",
       "exportFilePdf": "Экспорт в PDF",
       "zoom": "Масштаб",

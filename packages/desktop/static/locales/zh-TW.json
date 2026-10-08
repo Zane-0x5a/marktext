@@ -213,7 +213,8 @@
       "closeAllTabs": "關閉所有標籤頁",
       "rename": "重新命名",
       "copyPath": "複製路徑",
-      "showInFolder": "在資料夾中顯示"
+      "showInFolder": "在資料夾中顯示",
+      "showInSideBar": "在側邊欄中顯示"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "啟用 Pandoc 的 Markdown 擴充 tex_math_gfm",
         "texMathSingleBackslash": "啟用 Pandoc 的 Markdown 擴充 tex_math_single_backslash",
         "texMathDoubleBackslash": "啟用 Pandoc 的 Markdown 擴充 tex_math_double_backslash",
+        "highlightSyntax": "啟用非標準的 ==文字== 螢光標記語法",
+        "inlineDiff": "啟用非標準的行內差異語法 {+ … +} / [- … -]",
+        "multilineBlockquote": "啟用非標準的多行引用區塊語法 >>> … >>>",
         "isHtmlEnabled": "啟用 HTML 轉譯",
         "softNewlineAsSpace": "將軟換行視為空格",
         "sequenceTheme": "序列圖主題",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "相對圖片的複製位置",
         "imageRelativeDirectoryName": "相對圖片資料夾名稱",
         "fileSortOrder": "開啟資料夾中檔案的排序順序：遞增或遞減",
-        "openedFilesInSidebar": "是否在側邊欄中顯示已開啟的檔案"
+        "openedFilesInSidebar": "是否在側邊欄中顯示已開啟的檔案",
+        "showPandocConvert": "顯示 Pandoc 轉換選單。需要先安裝 Pandoc。"
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "選擇資料夾",
         "openBlankPage": "開啟空白頁面"
       },
+      "pandoc": {
+        "title": "Pandoc 轉換",
+        "description": "顯示 Pandoc 轉換選單",
+        "detailedDescription": "需要先安裝 Pandoc",
+        "found": "已找到：{path}",
+        "notFound": "未找到",
+        "recheck": "重新檢測"
+      },
       "sidebar": {
         "title": "側邊欄",
         "wrapTextInToc": "在目錄中換行文字",
         "showOpenedFiles": "顯示已開啟的檔案",
+        "autoReveal": "在側邊欄中定位目前檔案",
         "excludePatterns": "排除模式",
         "excludePatternsNotes": "排除模式（備註）",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub 的 TeX 數學公式（$`…`$ 與 ```math）",
         "texMathSingleBackslash": "使用單反斜線分隔符的 TeX 數學公式",
         "texMathDoubleBackslash": "使用雙反斜線分隔符的 TeX 數學公式",
+        "highlightSyntax": "螢光標記 (==文字==)",
+        "inlineDiff": "行內差異 ({+ … +})",
+        "multilineBlockquote": "多行引用區塊 (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON 大括號",
           "jsonSemicolon": "JSON 分號",
@@ -777,6 +794,7 @@
       "quit": "退出",
       "toggleAutoSave": "切換自動儲存",
       "importFile": "匯入檔案",
+      "revealInSideBar": "在側邊欄中顯示",
       "exportFile": "匯出檔案",
       "exportFilePdf": "匯出為 PDF",
       "zoom": "縮放",

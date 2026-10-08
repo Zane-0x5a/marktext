@@ -213,7 +213,8 @@
       "closeAllTabs": "すべてのタブを閉じる",
       "rename": "名前の変更",
       "copyPath": "パスのコピー",
-      "showInFolder": "フォルダーの表示"
+      "showInFolder": "フォルダーの表示",
+      "showInSideBar": "サイドバーに表示"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "Pandoc の markdown 拡張 tex_math_gfm を有効にする",
         "texMathSingleBackslash": "Pandoc の markdown 拡張 tex_math_single_backslash を有効にする",
         "texMathDoubleBackslash": "Pandoc の markdown 拡張 tex_math_double_backslash を有効にする",
+        "highlightSyntax": "非標準の ==テキスト== ハイライト構文を有効にする",
+        "inlineDiff": "非標準のインライン差分構文 {+ … +} / [- … -] を有効にする",
+        "multilineBlockquote": "非標準の複数行引用構文 >>> … >>> を有効にする",
         "isHtmlEnabled": "HTML レンダリングを有効にする",
         "softNewlineAsSpace": "ソフト改行をスペースとして扱う",
         "sequenceTheme": "シーケンス図のテーマ",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "相対画像のコピー先",
         "imageRelativeDirectoryName": "相対画像フォルダー名",
         "fileSortOrder": "開いたフォルダー内のファイルの並べ替え順、昇順または降順",
-        "openedFilesInSidebar": "開いているファイルをサイドバーに表示するかどうか"
+        "openedFilesInSidebar": "開いているファイルをサイドバーに表示するかどうか",
+        "showPandocConvert": "Pandoc 変換メニューを表示します。Pandoc がインストールされている必要があります。"
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "フォルダーの選択",
         "openBlankPage": "空白ページを開く"
       },
+      "pandoc": {
+        "title": "Pandoc 変換",
+        "description": "Pandoc 変換メニューを表示",
+        "detailedDescription": "Pandoc がインストールされている必要があります",
+        "found": "検出: {path}",
+        "notFound": "見つかりません",
+        "recheck": "再検出"
+      },
       "sidebar": {
         "title": "サイドバー",
         "wrapTextInToc": "目次でテキストを折り返し",
         "showOpenedFiles": "開いているファイルを表示",
+        "autoReveal": "サイドバーで現在のファイルを表示",
         "excludePatterns": "除外パターン",
         "excludePatternsNotes": "除外パターンの注意事項",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub の TeX 数式（$`…`$ と ```math）",
         "texMathSingleBackslash": "単一バックスラッシュの TeX 数式",
         "texMathDoubleBackslash": "二重バックスラッシュの TeX 数式",
+        "highlightSyntax": "ハイライト (==テキスト==)",
+        "inlineDiff": "インライン差分 ({+ … +})",
+        "multilineBlockquote": "複数行引用 (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON 括弧",
           "jsonSemicolon": "JSON セミコロン",
@@ -777,6 +794,7 @@
       "quit": "終了",
       "toggleAutoSave": "自動保存の切り替え",
       "importFile": "ファイルのインポート",
+      "revealInSideBar": "サイドバーに表示",
       "exportFile": "ファイルのエクスポート",
       "exportFilePdf": "PDF としてエクスポート",
       "zoom": "ズーム",

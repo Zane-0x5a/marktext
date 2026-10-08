@@ -62,7 +62,7 @@ class InlineRenderer {
     }
 
     patch(block: Format, cursor?: IRenderCursor, highlights: IHighlight[] = []) {
-        this._collectReferenceDefinitions();
+        this.labels = this.collectReferenceDefinitions();
         const { domNode } = block;
         if (block.isParent())
             debug.error('Patch can only handle content block');
@@ -76,12 +76,15 @@ class InlineRenderer {
         domNode!.innerHTML = html;
     }
 
-    // Every content block patches through here, so a full scan per call would
-    // make rendering a document quadratic; rescan only after the state changed.
-    private _collectReferenceDefinitions() {
+    // Reference definitions (`[ref]: url`) live in their own paragraphs, so
+    // resolving `[text][ref]` needs a document-wide pass. Shared with
+    // `getTOC`, which tokenizes headings outside a rendered block. Every
+    // content block patches through here, so the pass runs once per state
+    // revision; one per call would make rendering a document quadratic.
+    collectReferenceDefinitions(): Labels {
         const { jsonState } = this.muya.editor;
         if (jsonState.revision === this._labelsRevision)
-            return;
+            return this.labels;
         this._labelsRevision = jsonState.revision;
         const labels = new Map();
 
@@ -103,6 +106,7 @@ class InlineRenderer {
         travel(jsonState.liveState);
 
         this.labels = labels;
+        return labels;
     }
 
     getLabelInfo(blockOrState: ParagraphContent | IParagraphState) {

@@ -213,7 +213,8 @@
       "closeAllTabs": "Fermer tous les onglets",
       "rename": "Renommer",
       "copyPath": "Copier le chemin",
-      "showInFolder": "Afficher dans le dossier"
+      "showInFolder": "Afficher dans le dossier",
+      "showInSideBar": "Afficher dans la barre latérale"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "Activer l'extension markdown de pandoc tex_math_gfm",
         "texMathSingleBackslash": "Activer l'extension markdown de pandoc tex_math_single_backslash",
         "texMathDoubleBackslash": "Activer l'extension markdown de pandoc tex_math_double_backslash",
+        "highlightSyntax": "Activer la syntaxe de surlignage non standard ==texte==",
+        "inlineDiff": "Activer la syntaxe de diff en ligne non standard {+ … +} / [- … -]",
+        "multilineBlockquote": "Activer la syntaxe de citation multiligne non standard >>> … >>>",
         "isHtmlEnabled": "Activer le rendu HTML",
         "softNewlineAsSpace": "Traiter les sauts de ligne simples comme des espaces",
         "sequenceTheme": "Thème du diagramme de séquence",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "Où les images relatives sont copiées",
         "imageRelativeDirectoryName": "Le nom du dossier d'image relatif",
         "fileSortOrder": "Ordre de tri des fichiers dans les dossiers ouverts : croissant ou décroissant.",
-        "openedFilesInSidebar": "Afficher ou non les fichiers ouverts dans la barre latérale."
+        "openedFilesInSidebar": "Afficher ou non les fichiers ouverts dans la barre latérale.",
+        "showPandocConvert": "Afficher le menu de conversion Pandoc. Nécessite l'installation de Pandoc."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Sélectionner un dossier",
         "openBlankPage": "Ouvrir une page vierge"
       },
+      "pandoc": {
+        "title": "Conversion Pandoc",
+        "description": "Afficher le menu de conversion Pandoc",
+        "detailedDescription": "Nécessite l'installation de Pandoc",
+        "found": "Trouvé : {path}",
+        "notFound": "Introuvable",
+        "recheck": "Revérifier"
+      },
       "sidebar": {
         "title": "Barre latérale",
         "wrapTextInToc": "Retour à la ligne dans la table des matières",
         "showOpenedFiles": "Afficher les fichiers ouverts",
+        "autoReveal": "Afficher le fichier actif dans la barre latérale",
         "excludePatterns": "Motifs d'exclusion",
         "excludePatternsNotes": "Notes sur les motifs d'exclusion",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "Maths TeX de GitHub ($`…`$ et ```math)",
         "texMathSingleBackslash": "Maths TeX avec barre oblique inverse simple",
         "texMathDoubleBackslash": "Maths TeX avec barre oblique inverse double",
+        "highlightSyntax": "Surlignage (==texte==)",
+        "inlineDiff": "Diff en ligne ({+ … +})",
+        "multilineBlockquote": "Citation multiligne (>>>)",
         "frontmatterType": {
           "jsonBrace": "Accolade JSON",
           "jsonSemicolon": "Point-virgule JSON",
@@ -777,6 +794,7 @@
       "quit": "Quitter",
       "toggleAutoSave": "Basculer l'enregistrement automatique",
       "importFile": "Importer un fichier",
+      "revealInSideBar": "Afficher dans la barre latérale",
       "exportFile": "Exporter un fichier",
       "exportFilePdf": "Exporter en PDF",
       "zoom": "Zoom",

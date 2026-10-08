@@ -213,7 +213,8 @@
       "closeAllTabs": "Tüm sekmeleri kapat",
       "rename": "Yeniden Adlandır",
       "copyPath": "Yolu kopyala",
-      "showInFolder": "Klasörde göster"
+      "showInFolder": "Klasörde göster",
+      "showInSideBar": "Kenar çubuğunda göster"
     }
   },
   "search": {
@@ -417,6 +418,9 @@
         "texMathGfm": "Pandoc'un markdown uzantısı tex_math_gfm'i etkinleştir",
         "texMathSingleBackslash": "Pandoc'un markdown uzantısı tex_math_single_backslash'i etkinleştir",
         "texMathDoubleBackslash": "Pandoc'un markdown uzantısı tex_math_double_backslash'i etkinleştir",
+        "highlightSyntax": "Standart olmayan ==metin== vurgu söz dizimini etkinleştir",
+        "inlineDiff": "Standart olmayan satır içi fark söz dizimini {+ … +} / [- … -] etkinleştir",
+        "multilineBlockquote": "Standart olmayan çok satırlı alıntı söz dizimini >>> … >>> etkinleştir",
         "isHtmlEnabled": "HTML işlemeyi etkinleştir",
         "softNewlineAsSpace": "Yumuşak satır sonlarını boşluk olarak değerlendir",
         "sequenceTheme": "Dizi diyagramı teması",
@@ -434,7 +438,8 @@
         "plantumlServer": "PlantUML sunucu URL'si",
         "autoNormalizeLineEndings": "Dosyaları açarken yeni satır karakterlerini otomatik olarak normalleştir. Devre dışı bırakıldığında dosyalar olduğu gibi açılır.",
         "fileSortOrder": "Açık klasörlerdeki dosyaların sıralama düzeni: artan veya azalan.",
-        "openedFilesInSidebar": "Açık dosyaların kenar çubuğunda gösterilip gösterilmeyeceği."
+        "openedFilesInSidebar": "Açık dosyaların kenar çubuğunda gösterilip gösterilmeyeceği.",
+        "showPandocConvert": "Pandoc dönüştürme menüsünü gösterir. Pandoc kurulu olmalıdır."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Klasör Seç",
         "openBlankPage": "Boş sayfa aç"
       },
+      "pandoc": {
+        "title": "Pandoc Dönüştürme",
+        "description": "Pandoc dönüştürme menüsünü göster",
+        "detailedDescription": "Pandoc kurulu olmalıdır",
+        "found": "Bulundu: {path}",
+        "notFound": "Bulunamadı",
+        "recheck": "Yeniden Denetle"
+      },
       "sidebar": {
         "title": "Kenar Çubuğu",
         "wrapTextInToc": "İçindekilerde metni kaydır",
         "showOpenedFiles": "Açık dosyaları göster",
+        "autoReveal": "Etkin dosyayı kenar çubuğunda göster",
         "excludePatterns": "Hariç tutma desenleri",
         "excludePatternsNotes": "Hariç tutma desenleri (Notlar)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "GitHub TeX matematiği ($`…`$ ve ```math)",
         "texMathSingleBackslash": "Tek ters eğik çizgili TeX matematiği",
         "texMathDoubleBackslash": "Çift ters eğik çizgili TeX matematiği",
+        "highlightSyntax": "Vurgu (==metin==)",
+        "inlineDiff": "Satır içi fark ({+ … +})",
+        "multilineBlockquote": "Çok satırlı alıntı (>>>)",
         "frontmatterType": {
           "jsonBrace": "Süslü Parantezli JSON",
           "jsonSemicolon": "Noktalı Virgüllü JSON",
@@ -777,6 +794,7 @@
       "quit": "Çıkış",
       "toggleAutoSave": "Otomatik Kaydetmeyi Aç/Kapat",
       "importFile": "Dosya İçe Aktar",
+      "revealInSideBar": "Kenar çubuğunda göster",
       "exportFile": "Dosya Dışa Aktar",
       "exportFilePdf": "PDF Olarak Dışa Aktar",
       "zoom": "Yakınlaştırma",

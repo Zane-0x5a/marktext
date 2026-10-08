@@ -62,6 +62,8 @@ export const FORMAT_TYPES = [
     'strong',
     'em',
     'del',
+    'mark',
+    'inline_diff',
     'inline_code',
     'link',
     'image',
@@ -361,6 +363,9 @@ export const MUYA_DEFAULT_OPTIONS = {
     // extension: the two openers cannot collide, `\\(` carrying a backslash where
     // `\(` carries the parenthesis.
     texMathDoubleBackslash: false,
+    highlightSyntax: false,
+    inlineDiff: false,
+    multilineBlockquote: false,
     // Render soft line breaks as spaces instead of visual newlines.
     softNewlineAsSpace: false,
     // Move checked task list item to the end of task list.

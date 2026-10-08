@@ -213,7 +213,8 @@
       "closeAllTabs": "Fechar todas as abas",
       "rename": "Renomear",
       "copyPath": "Copiar caminho",
-      "showInFolder": "Mostrar na pasta"
+      "showInFolder": "Mostrar na pasta",
+      "showInSideBar": "Mostrar na barra lateral"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "Ativar a extensão markdown do pandoc tex_math_gfm",
         "texMathSingleBackslash": "Ativar a extensão markdown do pandoc tex_math_single_backslash",
         "texMathDoubleBackslash": "Ativar a extensão markdown do pandoc tex_math_double_backslash",
+        "highlightSyntax": "Ativar a sintaxe de realce não padrão ==texto==",
+        "inlineDiff": "Ativar a sintaxe de diff embutido não padrão {+ … +} / [- … -]",
+        "multilineBlockquote": "Ativar a sintaxe de citação multilinha não padrão >>> … >>>",
         "isHtmlEnabled": "Habilitar renderização HTML",
         "softNewlineAsSpace": "Tratar quebras de linha suaves como espaços",
         "sequenceTheme": "Tema do diagrama de sequência",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "Onde as imagens relativas são copiadas",
         "imageRelativeDirectoryName": "O nome da pasta de imagem relativa",
         "fileSortOrder": "Ordem de classificação dos arquivos nas pastas abertas: ascendente ou descendente.",
-        "openedFilesInSidebar": "Se os arquivos abertos são mostrados na barra lateral."
+        "openedFilesInSidebar": "Se os arquivos abertos são mostrados na barra lateral.",
+        "showPandocConvert": "Mostrar o menu de conversão do Pandoc. Requer o Pandoc instalado."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Selecionar Pasta",
         "openBlankPage": "Abrir página em branco"
       },
+      "pandoc": {
+        "title": "Conversão com Pandoc",
+        "description": "Mostrar o menu de conversão do Pandoc",
+        "detailedDescription": "Requer o Pandoc instalado",
+        "found": "Encontrado: {path}",
+        "notFound": "Não encontrado",
+        "recheck": "Verificar novamente"
+      },
       "sidebar": {
         "title": "Barra Lateral",
         "wrapTextInToc": "Quebrar texto no índice",
         "showOpenedFiles": "Mostrar arquivos abertos",
+        "autoReveal": "Mostrar o arquivo ativo na barra lateral",
         "excludePatterns": "Padrões de exclusão",
         "excludePatternsNotes": "Padrões de exclusão (Notas)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "Matemática TeX do GitHub ($`…`$ e ```math)",
         "texMathSingleBackslash": "Matemática TeX com barra invertida simples",
         "texMathDoubleBackslash": "Matemática TeX com barra invertida dupla",
+        "highlightSyntax": "Realce (==texto==)",
+        "inlineDiff": "Diff embutido ({+ … +})",
+        "multilineBlockquote": "Citação multilinha (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON com Chaves",
           "jsonSemicolon": "JSON com Ponto e Vírgula",
@@ -777,6 +794,7 @@
       "quit": "Sair",
       "toggleAutoSave": "Alternar Salvamento Automático",
       "importFile": "Importar Arquivo",
+      "revealInSideBar": "Mostrar na barra lateral",
       "exportFile": "Exportar Arquivo",
       "exportFilePdf": "Exportar como PDF",
       "zoom": "Zoom",

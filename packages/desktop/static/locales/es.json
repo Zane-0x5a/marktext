@@ -213,7 +213,8 @@
       "closeAllTabs": "Cerrar todas las pestañas",
       "rename": "Renombrar",
       "copyPath": "Copiar ruta",
-      "showInFolder": "Mostrar en carpeta"
+      "showInFolder": "Mostrar en carpeta",
+      "showInSideBar": "Mostrar en la barra lateral"
     }
   },
   "search": {
@@ -418,6 +419,9 @@
         "texMathGfm": "Activar la extensión de markdown de pandoc tex_math_gfm",
         "texMathSingleBackslash": "Activar la extensión de markdown de pandoc tex_math_single_backslash",
         "texMathDoubleBackslash": "Activar la extensión de markdown de pandoc tex_math_double_backslash",
+        "highlightSyntax": "Habilitar la sintaxis de resaltado no estándar ==texto==",
+        "inlineDiff": "Habilitar la sintaxis de diff en línea no estándar {+ … +} / [- … -]",
+        "multilineBlockquote": "Habilitar la sintaxis de cita de varias líneas no estándar >>> … >>>",
         "isHtmlEnabled": "Habilitar renderizado HTML",
         "softNewlineAsSpace": "Tratar los saltos de línea suaves como espacios",
         "sequenceTheme": "Tema del diagrama de secuencia",
@@ -434,7 +438,8 @@
         "imageRelativeDirectoryBase": "Dónde se copian las imágenes relativas",
         "imageRelativeDirectoryName": "El nombre de la carpeta de imagen relativa",
         "fileSortOrder": "El orden de clasificación de los archivos en las carpetas abiertas: ascendente o descendente",
-        "openedFilesInSidebar": "Si mostrar los archivos abiertos en la barra lateral"
+        "openedFilesInSidebar": "Si mostrar los archivos abiertos en la barra lateral",
+        "showPandocConvert": "Mostrar el menú de conversión de Pandoc. Requiere tener Pandoc instalado."
       }
     },
     "categories": {
@@ -478,10 +483,19 @@
         "selectFolder": "Seleccionar Carpeta",
         "openBlankPage": "Abrir página en blanco"
       },
+      "pandoc": {
+        "title": "Conversión con Pandoc",
+        "description": "Mostrar el menú de conversión de Pandoc",
+        "detailedDescription": "Requiere tener Pandoc instalado",
+        "found": "Encontrado: {path}",
+        "notFound": "No encontrado",
+        "recheck": "Volver a comprobar"
+      },
       "sidebar": {
         "title": "Barra Lateral",
         "wrapTextInToc": "Ajustar texto en tabla de contenidos",
         "showOpenedFiles": "Mostrar archivos abiertos",
+        "autoReveal": "Mostrar el archivo activo en la barra lateral",
         "excludePatterns": "Patrones de exclusión",
         "excludePatternsNotes": "Patrones de exclusión (Notas)",
         "fileSortBy": {
@@ -646,6 +660,9 @@
         "texMathGfm": "Matemáticas TeX de GitHub ($`…`$ y ```math)",
         "texMathSingleBackslash": "Matemáticas TeX con barra invertida simple",
         "texMathDoubleBackslash": "Matemáticas TeX con barra invertida doble",
+        "highlightSyntax": "Resaltado (==texto==)",
+        "inlineDiff": "Diff en línea ({+ … +})",
+        "multilineBlockquote": "Cita de varias líneas (>>>)",
         "frontmatterType": {
           "jsonBrace": "JSON con Llaves",
           "jsonSemicolon": "JSON con Punto y Coma",
@@ -777,6 +794,7 @@
       "quit": "Salir",
       "toggleAutoSave": "Alternar Guardado Automático",
       "importFile": "Importar Archivo",
+      "revealInSideBar": "Mostrar en la barra lateral",
       "exportFile": "Exportar Archivo",
       "exportFilePdf": "Exportar como PDF",
       "zoom": "Zoom",
