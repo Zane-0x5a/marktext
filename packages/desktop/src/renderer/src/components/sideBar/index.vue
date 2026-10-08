@@ -104,6 +104,9 @@ onMounted(() => {
     }
 
     const mouseDownHandler = (event: MouseEvent): void => {
+      // Chromium would otherwise start dragging the draggable row beneath the
+      // bar, which on Windows hides the window for a native file drag.
+      event.preventDefault()
       startX = event.clientX
       startWidth = +sideBarWidth.value
       document.addEventListener('mousemove', mouseMoveHandler, false)

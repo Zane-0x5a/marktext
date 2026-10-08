@@ -98,6 +98,26 @@ test.describe('Sidebar file drag', () => {
     await expect.poll(() => drags(app)).toEqual([{ file: filename, iconEmpty: false }])
   })
 
+  test('resizing the side bar over a row does not drag the file', async() => {
+    await page.locator('.side-bar-file[title$="中文 note #1.md"]').click()
+    const row = page.locator('.opened-file').filter({ hasText: '中文 note #1.md' })
+    const rowBox = (await row.boundingBox())!
+    const bar = (await page.locator('.side-bar .drag-bar').boundingBox())!
+    const sideBarWidth = () => page.locator('.side-bar').evaluate((el) => el.getBoundingClientRect().width)
+    const before = await sideBarWidth()
+    const x = bar.x + bar.width / 2
+    const y = rowBox.y + rowBox.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    try {
+      await page.mouse.move(x + 60, y, { steps: 6 })
+    } finally {
+      await page.mouse.up()
+    }
+    expect(await drags(app)).toEqual([])
+    await expect.poll(sideBarWidth).toBeGreaterThan(before + 40)
+  })
+
   test('renaming disables file drag without losing input focus', async() => {
     const row = page.locator('.side-bar-file[title$="中文 note #1.md"]')
     await row.click()
