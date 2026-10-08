@@ -1,9 +1,10 @@
 # Document camera zoom
 
-Pinch with two fingers over the document to magnify or shrink it. Ctrl + wheel
-uses the same path. Ordinary two-finger scrolling remains native. The range is
-25–400%; switching files always restores 100%, including when returning to a
-previous tab. Zoom also works in source mode.
+Pinch with two fingers over the document to magnify it. Ctrl + wheel uses the
+same path. Ordinary two-finger scrolling remains native. The range is 100–400%:
+the camera only magnifies, and pinching in stops at the normal size. Switching
+files always restores 100%, including when returning to a previous tab. Zoom
+also works in source mode.
 
 The document retains its original column width, fonts, line breaks, spacing,
 tables and formula layout. A CSS transform changes the document's drawing scale
@@ -18,8 +19,10 @@ and selection. ResizeObserver tracks document edits and window resizing. Wheel
 deltas are continuous and exponential; requestAnimationFrame coalesces input
 into one camera update per frame. Scaling only updates the plane's transform,
 the stage's extent and the native scroll position. It never rerenders the
-document or serializes it. No permanent GPU layer is allocated for the entire
-document, and no bitmap snapshot is used for text zoom.
+document or serializes it. No GPU layer is allocated for the entire document,
+and no bitmap snapshot is used for text zoom. In long documents most
+off-screen blocks are skipped (see `document-virtualization.md`), so a frame
+repaints little beyond what is on screen.
 
 CodeMirror 5 keeps its geometry caches in logical pixels through the
 `coordinateScale` getter supplied by the source editor. The bundled
@@ -29,8 +32,8 @@ Muya converts image resize deltas to logical widths and scales line heights
 when comparing caret rectangles for arrow navigation.
 
 The point under the gesture stays anchored while scroll bounds permit it.
-When the drawing is narrower than the viewport it is centered. The viewport
-reserves its vertical scrollbar gutter so new scrollbars cannot change wrapping.
+The viewport reserves its vertical scrollbar gutter so new scrollbars cannot
+change wrapping.
 Saved scroll positions use document coordinates rather than zoomed pixels.
 Tab changes cancel pending animation frames before resetting the camera.
 Electron's native visual pinch is disabled to prevent accidental window zoom.
@@ -50,5 +53,11 @@ on a 160-section document. Physical touchpad feel depends on the device and OS;
 automated input exercises Chromium's Ctrl+wheel pinch event path.
 Editing regressions also cover scaled image resize, wrapped-paragraph arrow
 navigation, and source clicks, caret drawing and Chinese text insertion at
-25–400%. Source-mode print exports read the current tab and derive the TOC from
-the exported headings without modifying either editor's undo history.
+100–400%, and that pinching in never goes below 100%. Source-mode print
+exports read the current tab and derive the TOC from the exported headings
+without modifying either editor's undo history.
+
+Local runs can keep the test windows off screen and out of focus:
+`MARKTEXT_E2E_BACKGROUND=1`. Three camera tests compare geometry to 0.03 CSS
+px and are off by about half a pixel in an off-screen window; run them on
+screen.
