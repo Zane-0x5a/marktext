@@ -94,4 +94,23 @@ const listToTree = <T extends ListItem>(list: T[]): Array<TreeNode<T>> => {
   return rootNode.children
 }
 
+// Item-by-item comparison of two lists whose items hold only primitive values.
+// The TOC is compared after every edit; a generic deep-equal over Vue's
+// reactive proxies cost ~140 µs per heading, which is why this stays shallow.
+export const isSameList = (a: readonly ListItem[], b: readonly ListItem[]): boolean => {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i] as unknown as Record<string, unknown>
+    const right = b[i] as unknown as Record<string, unknown>
+    if (left === right) continue
+    const keys = Object.keys(left)
+    if (keys.length !== Object.keys(right).length) return false
+    for (const key of keys) {
+      if (!(key in right) || left[key] !== right[key]) return false
+    }
+  }
+  return true
+}
+
 export default listToTree

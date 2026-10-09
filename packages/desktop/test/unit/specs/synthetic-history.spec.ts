@@ -127,6 +127,45 @@ describe('SyntheticHistory (saved/clean indicator id allocator)', () => {
     expect(ids.size).toBe(5000)
   })
 
+  // The hash walks the whole document on every keystroke, so it must still tell
+  // apart edits that a cheap or position-blind hash would conflate.
+  it('distinguishes single-character edits anywhere in a large document', () => {
+    const body = Array.from({ length: 8000 }, (_, i) => `paragraph ${i} lorem ipsum`).join('\n\n')
+    const h = new SyntheticHistory(body)
+    const seen = new Set<number>([0])
+    for (const at of [0, 1, 4000, body.length - 2, body.length - 1]) {
+      const edited = body.slice(0, at) + (body[at] === 'x' ? 'y' : 'x') + body.slice(at + 1)
+      seen.add(h.idFor(edited))
+    }
+    expect(seen.size).toBe(6)
+  })
+
+  it('distinguishes reordered and re-cased content', () => {
+    const h = new SyntheticHistory('')
+    const ids = new Set([
+      h.idFor('ab'),
+      h.idFor('ba'),
+      h.idFor('Ab'),
+      h.idFor('aB'),
+      h.idFor('a b')
+    ])
+    expect(ids.size).toBe(5)
+  })
+
+  it('ignores any mix of trailing CR and LF, but not interior newlines', () => {
+    const h = new SyntheticHistory('text')
+    expect(h.idFor('text\r\n')).toBe(0)
+    expect(h.idFor('text\n\r\n\n')).toBe(0)
+    expect(h.idFor('te\nxt')).not.toBe(0)
+    expect(h.idFor('\ntext')).not.toBe(0)
+  })
+
+  it('maps empty and newline-only content to the same baseline', () => {
+    const h = new SyntheticHistory('')
+    expect(h.idFor('\n\n')).toBe(0)
+    expect(h.idFor('\r\n')).toBe(0)
+  })
+
   it('build() emits a desktop-shaped single-entry history', () => {
     const h = new SyntheticHistory('')
     const hist = h.build('X')

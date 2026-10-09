@@ -1,7 +1,7 @@
-import equal from 'deep-equal'
+import { toRaw } from 'vue'
 import bus from '../bus'
 import { getUniqueId, deepClone } from '../util'
-import listToTree, { type ListItem, type TreeNode } from '../util/listToTree'
+import listToTree, { isSameList, type ListItem, type TreeNode } from '../util/listToTree'
 import {
   createDocumentState,
   getOptionsFromState,
@@ -104,7 +104,6 @@ interface ContentChangePayload {
   muyaIndexCursor?: unknown
   history?: IFileState['history']
   toc?: TocItem[]
-  blocks?: unknown
 }
 
 interface AffiliationEntry {
@@ -544,10 +543,11 @@ export const useEditorStore = defineStore('editor', {
       }
     },
 
-    // Flush any edit still queued in the engine's rAF batch into the active
-    // tab's `currentFile` before its markdown is read to persist — otherwise an
-    // edit made in the same frame as the read is silently dropped from the
-    // written file (#3803), the way tab switching already guards (#2938). Safe
+    // Flush any edit still queued in the engine's rAF batch, and the deferred
+    // markdown / dirty-state / TOC snapshot of the WYSIWYG editor, into the
+    // active tab before it is read — otherwise an edit made just before the
+    // read is missing from it: dropped from the written file (#3803), lost on a
+    // tab switch (#2938), or not counted as unsaved on close or reload. Safe
     // no-op when nothing is pending.
     flushActiveEditor(): void {
       bus.emit('flush-active-editor')
@@ -690,6 +690,7 @@ export const useEditorStore = defineStore('editor', {
       const projectStore = useProjectStore()
       const preferencesStore = usePreferencesStore()
       window.electron.ipcRenderer.on('mt::ask-for-close', () => {
+        this.flushActiveEditor()
         sendBufferedState()
           .catch((err) => {
             console.error('Failed to update buffered state before closing', err)
@@ -729,6 +730,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     ASK_FOR_SAVE_ALL(closeTabs: boolean): void {
+      this.flushActiveEditor()
       const { tabs } = this
       const projectStore = useProjectStore()
       const unsavedFiles = tabs
@@ -1006,6 +1008,7 @@ export const useEditorStore = defineStore('editor', {
     CLOSE_TAB(file: IFileState | null = null): void {
       const target = file ?? this.currentFile
       if (target === null) return
+      this.flushActiveEditor()
 
       if (target.isSaved) {
         this.FORCE_CLOSE_TAB(target)
@@ -1117,6 +1120,7 @@ export const useEditorStore = defineStore('editor', {
     },
 
     CLOSE_SAVED_TABS(): void {
+      this.flushActiveEditor()
       this.tabs
         .filter((f) => f.isSaved)
         .forEach((tab) => {
@@ -1390,6 +1394,7 @@ export const useEditorStore = defineStore('editor', {
 
       let keepTabBarState = false
       if (currentFile) {
+        this.flushActiveEditor()
         const { isSaved, pathname: cfPath } = currentFile
         if (isSaved && !cfPath) {
           keepTabBarState = true
@@ -1509,8 +1514,7 @@ export const useEditorStore = defineStore('editor', {
       cursor,
       muyaIndexCursor,
       history,
-      toc,
-      blocks
+      toc
     }: ContentChangePayload): void {
       const preferencesStore = usePreferencesStore()
       const { autoSave } = preferencesStore
@@ -1541,10 +1545,9 @@ export const useEditorStore = defineStore('editor', {
       if (cursor) tab.cursor = cursor
       if (muyaIndexCursor) tab.muyaIndexCursor = muyaIndexCursor
       if (history) tab.history = history
-      if (blocks) tab.blocks = blocks
 
       // Only update TOC if it's the current file
-      if (id === this.currentFile?.id && toc && !equal(toc, this.listToc)) {
+      if (id === this.currentFile?.id && toc && !isSameList(toc, toRaw(this.listToc))) {
         this.listToc = toc
         this.toc = listToTree<TocItem>(toc)
       }
@@ -1764,6 +1767,8 @@ export const useEditorStore = defineStore('editor', {
 
     LISTEN_FOR_FILE_CHANGE(): void {
       window.electron.ipcRenderer.on('mt::update-file', (_, payload) => {
+        // A reload that looks safe must not discard an edit still being published.
+        this.flushActiveEditor()
         const { type, change } = payload
         const { tabs } = this
         const { pathname } = change

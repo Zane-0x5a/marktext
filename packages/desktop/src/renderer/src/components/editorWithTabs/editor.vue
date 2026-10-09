@@ -103,6 +103,7 @@ import { EditorCamera } from '@/util/editorCamera'
 import { DocumentVirtualizer, type ScrollAnchor } from '@/util/documentVirtualizer'
 import { exportStyledHTML } from '@/util/exportHtml'
 import { applyCursor, isIndexCursor } from '@/util/cursor'
+import { createDeferredTask } from '@/util/deferredTask'
 import EditorSearch from '../search/index.vue'
 import MediaViewer from '../mediaViewer/index.vue'
 import bus from '@/bus'
@@ -328,6 +329,40 @@ const pruneClosedTabState = (liveTabIds: Set<string>): void => {
     if (!liveTabIds.has(id)) syntheticHistoryByTab.delete(id)
   }
 }
+
+// Every snapshot below walks the whole document, which took tens of ms per
+// keystroke in long notes. `json-change` is emitted from the engine's
+// animation-frame callback, so doing that work there delayed painting the
+// typed character; it now runs after the frame, at most once per interval.
+// Anything that reads the tab's markdown, dirty state or TOC must call
+// `flushActiveEditor()` first, and the engine's content must not be replaced
+// while a change is pending: the snapshot is taken from the live engine and
+// attributed to `pendingContentChangeTabId`.
+const CONTENT_CHANGE_INTERVAL_MS = 150
+let pendingContentChangeTabId: string | null = null
+const publishContentChange = () => {
+  const id = pendingContentChangeTabId
+  pendingContentChangeTabId = null
+  if (!id || !editor.value) return
+  const markdown = editor.value.getMarkdown()
+  // Stash the real engine history for in-session tab-switch restoration. The
+  // synthetic save-tracking id is derived from the live document content (a
+  // monotonic, never-reused id — see `syntheticHistory.ts`), NOT the engine
+  // undo-stack depth, which is reused and falsely showed a divergently
+  // re-edited tab as clean (Phase G — G6).
+  engineHistoryByTab.set(id, editor.value.getHistory())
+  editorStore.LISTEN_FOR_CONTENT_CHANGE({
+    id,
+    markdown,
+    wordCount: muyaWordCount(markdown),
+    cursor: serializeCursor(editor.value.getSelection()),
+    // Synthetic, desktop-shaped history so the store's save/dirty tracking
+    // keeps working (the engine history shape is incompatible).
+    history: makeSyntheticHistory(id, markdown),
+    toc: editor.value.getTOC()
+  })
+}
+const contentChange = createDeferredTask(publishContentChange, CONTENT_CHANGE_INTERVAL_MS)
 
 interface SelectionFormatLike {
   type: string
@@ -797,6 +832,7 @@ watch(
         // edit permanently. Same guard as saving (#3803) and tab switch
         // (#2938).
         editor.value.flush()
+        contentChange.flush()
         // Compute the WYSIWYG caret as a source-markdown `{ line, ch }` index
         // cursor JUST-IN-TIME, only when entering source mode (Phase G — G7),
         // and write it to the tab before sourceCode.vue mounts (`flush: 'sync'`
@@ -1441,6 +1477,7 @@ const setMarkdownToEditor = (payload: unknown) => {
   if (editor.value) {
     // `setContent` resets the document and clears the undo history; only set a
     // cursor afterwards (a freshly-opened file has no history to restore).
+    contentChange.flush()
     editor.value.setContent(newMarkdown ?? '')
     virtualizer?.reset()
     // The freshly loaded content is this tab's clean baseline (id 0). Re-seed
@@ -1499,6 +1536,8 @@ const handleFileChange = (payload: unknown) => {
   if (!container) return
 
   if (typeof newMarkdown === 'string') {
+    // The pending snapshot belongs to the document the engine still holds.
+    contentChange.flush()
     // Returning from source-code mode: the WYSIWYG engine is never unmounted
     // while source mode is up (index.vue overlays it via `v-if`), so it still
     // holds the PRE-source-mode document and undo history. Record the bulk
@@ -1525,6 +1564,7 @@ const handleFileChange = (payload: unknown) => {
       // history/content already match — either way the caret still needs
       // remapping below.
       editor.value.replaceContent(newMarkdown, preSourceModeSelection)
+      contentChange.flush()
       preSourceModeSelection = null
       editorStore.UPDATE_TOC(editor.value.getTOC())
       // Map the CodeMirror `{ line, ch }` cursor onto a block-key cursor so the
@@ -1548,6 +1588,7 @@ const handleFileChange = (payload: unknown) => {
         resetSyntheticHistory(id, newMarkdown)
       }
       editor.value.replaceContent(newMarkdown)
+      contentChange.flush()
       editorStore.UPDATE_TOC(editor.value.getTOC())
       if (newCursor) {
         applyCursor(editor.value, newCursor)
@@ -1611,6 +1652,7 @@ const blurEditor = () => {
 
 const flushActiveEditor = () => {
   editor.value?.flush()
+  contentChange.flush()
 }
 
 // The engine's `focus()` only sets the selection range; the contenteditable
@@ -1825,8 +1867,8 @@ onMounted(() => {
 
   // The engine emits a low-level `json-change` ({ op, source, prevDoc, doc })
   // on every document mutation; the desktop's content-change pipeline wants the
-  // derived document snapshot (markdown / word count / cursor / history / TOC /
-  // block AST), so we compute it here — mirroring the legacy engine's
+  // derived document snapshot (markdown / word count / cursor / history / TOC),
+  // so we compute it in `publishContentChange` — mirroring the legacy engine's
   // `dispatchChange` payload.
   editor.value.on('json-change', () => {
     // There is a chance that this event is fired AFTER the tab is switched. If we purely rely on this.currentFile later on
@@ -1834,25 +1876,8 @@ onMounted(() => {
     if (!currentFile.value || !editor.value) return
     const { id } = currentFile.value
     if (!id) return
-    const markdown = editor.value.getMarkdown()
-    // Stash the real engine history for in-session tab-switch restoration. The
-    // synthetic save-tracking id is derived from the live document content (a
-    // monotonic, never-reused id — see `syntheticHistory.ts`), NOT the engine
-    // undo-stack depth, which is reused and falsely showed a divergently
-    // re-edited tab as clean (Phase G — G6).
-    const engineHistory = editor.value.getHistory()
-    engineHistoryByTab.set(id, engineHistory)
-    editorStore.LISTEN_FOR_CONTENT_CHANGE({
-      id,
-      markdown,
-      wordCount: muyaWordCount(markdown),
-      cursor: serializeCursor(editor.value.getSelection()),
-      // Synthetic, desktop-shaped history so the store's save/dirty tracking
-      // keeps working (the engine history shape is incompatible).
-      history: makeSyntheticHistory(id, markdown),
-      toc: editor.value.getTOC(),
-      blocks: editor.value.getState()
-    })
+    pendingContentChangeTabId = id
+    contentChange.request()
   })
 
   // The engine does not emit `scroll`; listen on the scroll container directly
@@ -1965,6 +1990,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  contentChange.flush()
   bus.off('file-loaded', setMarkdownToEditor)
   bus.off('invalidate-image-cache', handleInvalidateImageCache)
   bus.off('undo', handleUndo)
