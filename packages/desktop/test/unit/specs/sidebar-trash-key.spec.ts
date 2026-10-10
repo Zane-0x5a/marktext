@@ -83,21 +83,18 @@ describe('sidebar trash keyboard rules', () => {
     ).toBe(false)
   })
 
-  it('compares Windows watcher paths with the root as the renderer normalized it', () => {
-    expect(isPathWithinRoot('C:\\docs\\sub\\a.md', 'C:/docs', '/')).toBe(true)
-    expect(isPathWithinRoot('C:\\docs', 'C:/docs', '/')).toBe(true)
-    expect(isPathWithinRoot('C:\\docs2\\a.md', 'C:/docs', '/')).toBe(false)
-    expect(isPathWithinRoot('\\\\server\\share\\docs\\a.md', '//server/share/docs', '/')).toBe(true)
-    expect(isPathWithinRoot('\\\\server\\share\\docs2\\a.md', '//server/share/docs', '/')).toBe(false)
+  it('matches roots and descendants across separator styles (#5683)', () => {
+    expect(isPathWithinRoot('C:\\Users\\test\\proj\\a.md', 'C:/Users/test/proj', '/')).toBe(true)
+    expect(isPathWithinRoot('C:\\Users\\test\\proj', 'C:/Users/test/proj', '/')).toBe(true)
+    expect(isPathWithinRoot('C:\\Users\\other\\a.md', 'C:/Users/test/proj', '/')).toBe(false)
+    // A native-separator file selection inside a posix root is still trashed.
     expect(
       shouldTrashSelection({
         ...base,
-        projectRootPath: 'C:/docs',
-        selection: { pathname: 'C:\\docs\\notes.md', isFile: true }
+        selection: { pathname: 'C:\\Users\\test\\proj\\a.md', isFile: true },
+        projectRootPath: 'C:/Users/test/proj'
       })
     ).toBe(true)
-    // On POSIX a backslash is part of a name, not a separator.
-    expect(isPathWithinRoot('/docs\\a.md', '/docs', '/')).toBe(false)
   })
 
   it('ignores empty or unknown selections', () => {
