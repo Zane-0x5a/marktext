@@ -476,9 +476,9 @@ const ensureOutput = (): Promise<Output> => {
   const promise = (async () => {
     const html = preview!.buildPrintDocument()
     const result = await invoke('mt::print-preview::render', session, html, printLayout)
-    const pdf = await getDocument({ data: result.pdf.slice(), isEvalSupported: false }).promise
+    const pdf = await getDocument({ data: result.pdf.slice() }).promise
     if (disposed || target !== revision) {
-      await pdf.destroy()
+      await pdf.loadingTask.destroy()
       throw new Error(t('printPreview.outdated'))
     }
     // Every preview page start is a forced break, so a page that did not fit
@@ -489,7 +489,7 @@ const ensureOutput = (): Promise<Output> => {
     const previous = output
     const current = { revision: target, snapshot: result.revision, layout: printLayout, pdf }
     output = current
-    await previous?.pdf.destroy()
+    await previous?.pdf.loadingTask.destroy()
     return current
   })()
   outputTask = { revision: target, promise }
@@ -628,7 +628,7 @@ onBeforeUnmount(() => {
   clearTimeout(updateTimer)
   clearTimeout(outputTimer)
   observer?.disconnect()
-  output?.pdf.destroy().catch(() => {})
+  output?.pdf.loadingTask.destroy().catch(() => {})
   if (session) invoke('mt::print-preview::close', session).catch(() => {})
 })
 </script>

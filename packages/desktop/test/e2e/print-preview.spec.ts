@@ -151,7 +151,7 @@ const savePdf = async(app: ElectronApplication, page: Page, target: string) => {
 
 const readPdf = async(data: Buffer) => {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const doc = await getDocument({ data: new Uint8Array(data), isEvalSupported: false }).promise
+  const doc = await getDocument({ data: new Uint8Array(data) }).promise
   const pages = []
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i)
@@ -166,7 +166,7 @@ const readPdf = async(data: Buffer) => {
       positions: content.items.flatMap((item) => ('transform' in item ? [item.transform] : []))
     })
   }
-  await doc.destroy()
+  await doc.loadingTask.destroy()
   return pages
 }
 
