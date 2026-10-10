@@ -40,12 +40,8 @@ const createFixture = (): Fixture => {
 const treeRow = (page: Page, filePath: string) =>
   page.locator(`.tree-wrapper .side-bar-file[title=${cssString(filePath)}]`)
 
-// The renderer builds folder rows itself, with '/' paths on every platform; file
-// rows carry the watcher's native paths.
-const folderTitle = (folderPath: string): string => cssString(folderPath.split(path.sep).join('/'))
-
 const folderHeader = (page: Page, folderPath: string) =>
-  page.locator(`.tree-wrapper .folder-name[title=${folderTitle(folderPath)}]`)
+  page.locator(`.tree-wrapper .folder-name[title=${cssString(folderPath)}]`)
 
 const tab = (page: Page, filePath: string) =>
   page.locator(`.editor-tabs .tabs-container li[title=${cssString(filePath)}]`)
@@ -72,7 +68,7 @@ const isFolderCollapsed = (page: Page, folderPath: string): Promise<boolean> =>
   page.evaluate((selector) => {
     const arrow = document.querySelector(`${selector} .icon-arrow`)
     return !!arrow && arrow.classList.contains('fold')
-  }, `.tree-wrapper .folder-name[title=${folderTitle(folderPath)}]`)
+  }, `.tree-wrapper .folder-name[title=${cssString(folderPath)}]`)
 
 const setFolderExpanded = async(
   page: Page,

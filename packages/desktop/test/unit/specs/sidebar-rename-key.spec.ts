@@ -47,15 +47,14 @@ describe('sidebar rename keyboard rules', () => {
     expect(shouldRenameSelection({ ...base, isEditingName: true })).toBe(false)
   })
 
-  it('accepts watcher paths with Windows separators under a normalized renderer root', () => {
+  it('matches Windows paths under a Windows root', () => {
+    const windows = { ...base, projectRootPath: 'C:\\docs', pathSeparator: '\\' }
     expect(shouldRenameSelection({
-      ...base,
-      projectRootPath: 'C:/docs',
+      ...windows,
       selection: { pathname: 'C:\\docs\\notes.md', isFile: true }
     })).toBe(true)
     expect(shouldRenameSelection({
-      ...base,
-      projectRootPath: 'C:/docs',
+      ...windows,
       selection: { pathname: 'C:\\docs-other\\notes.md', isFile: true }
     })).toBe(false)
   })
