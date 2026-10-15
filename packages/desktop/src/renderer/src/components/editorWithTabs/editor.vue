@@ -1214,7 +1214,8 @@ const getCursorY = (): number | null => {
         : range.startContainer.parentElement
     rects = parent ? parent.getClientRects() : rects
   }
-  return rects.length ? rects[0].y : null
+  // Match Muya's caret geometry at soft wraps (#3510).
+  return rects.length ? rects[range.collapsed ? rects.length - 1 : 0].y : null
 }
 
 // Only the slug-to-element pairing is cached. Positions are not: typing body

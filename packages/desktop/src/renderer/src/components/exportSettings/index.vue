@@ -43,12 +43,6 @@
         <h3>{{ t('exportSettings.title') }}</h3>
         <el-tabs v-model="activeName">
           <el-tab-pane
-            :label="t('exportSettings.info.label')"
-            name="info"
-          >
-            <span class="text">{{ t('exportSettings.info.description') }}</span>
-          </el-tab-pane>
-          <el-tab-pane
             :label="t('exportSettings.page.label')"
             name="page"
           >
@@ -122,6 +116,9 @@
             :label="t('exportSettings.toc.label')"
             name="toc"
           >
+            <p class="text">
+              {{ t('exportSettings.toc.description') }}
+            </p>
             <bool
               :description="t('exportSettings.toc.includeTopHeading')"
               :detailed-description="t('exportSettings.toc.includeTopHeadingDetail')"
@@ -177,7 +174,7 @@ const documentTitle = ref('')
 const editorStore = useEditorStore()
 const themesLoaded = ref(false)
 const showExportSettingsDialog = ref(false)
-const activeName = ref('info')
+const activeName = ref('page')
 const themeList = ref(getExportThemeList())
 const pageSizeList = ref(getPageSizeList())
 const settings = reactive(createExportSettings())

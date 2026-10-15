@@ -71,6 +71,15 @@ describe('exportStyledHTML — wrapper parity', () => {
     expect(body).toContain('<article class="markdown-body">')
     expect(body).not.toContain('<body>')
   })
+
+  it('preserves `$<` in the exported body', async() => {
+    const out = await exportStyledHTML(NO_MUYA, 'literal `$<` text', {})
+
+    expect((out.match(/<body>/g) || []).length).toBe(1)
+    expect((out.match(/<\/body>/g) || []).length).toBe(1)
+    expect((out.match(/<article class="markdown-body">/g) || []).length).toBe(1)
+    expect(out).toContain('<p>literal <code>$&lt;</code> text</p>')
+  })
 })
 
 describe('exportStyledHTML — [TOC] expansion and slug matching', () => {
@@ -258,6 +267,13 @@ describe('exportStyledHTML — relative image paths', () => {
     expect(out).toMatch(/<img[^>]+src="file:\/\/\/docs\/a\.png"/)
     expect(out).not.toContain('src="./a.png"')
     expect(out).toContain('alt="alt"')
+  })
+
+  it('resolves Windows separators in Markdown image destinations (#5714)', async() => {
+    const filename = '90ddb94aced7dd9421a1dc67e76a83c9f0a77378.png'
+    const out = await exportStyledHTML(NO_MUYA, `![](assets\\${filename})`, {})
+
+    expect(out).toContain(`src="file:///docs/assets/${filename}"`)
   })
 
   it('leaves a remote http(s) img src untouched', async() => {

@@ -52,6 +52,7 @@ table.page-container > tfoot { display: table-header-group; }
 .page-header .hf-container,
 .page-footer-fake .hf-container,
 .page-footer .hf-container { display: flex; justify-content: space-between; font-size: 0.75em; font-weight: 400; }
+.hf-container { font-family: "Noto Music", "Noto Sans Math", "Open Sans", sans-serif; }
 .page-header { display: table-header-group; }
 .page-header .hf-container { margin-bottom: 16px; }
 .page-header.styled .hf-container { padding-bottom: 1px; border-bottom: 1px solid var(--footerHeaderBorderColor); }
@@ -223,9 +224,9 @@ export const exportStyledHTML = async(
   // back to a raw `[TOC]` if present.
   if (toc) {
     if (/<p>\s*\[TOC\]\s*<\/p>/i.test(article)) {
-      article = article.replace(/<p>\s*\[TOC\]\s*<\/p>/i, toc)
+      article = article.replace(/<p>\s*\[TOC\]\s*<\/p>/i, () => toc)
     } else if (TOC_REG.test(article)) {
-      article = article.replace(TOC_REG, toc)
+      article = article.replace(TOC_REG, () => toc)
     }
   }
 
@@ -245,5 +246,5 @@ export const exportStyledHTML = async(
   }
 
   // Re-emit the engine document shell with the (possibly augmented) body.
-  return fullDoc.replace(/<body>[\s\S]*<\/body>/, `<body>\n  ${bodyHtml}\n</body>`)
+  return fullDoc.replace(/<body>[\s\S]*<\/body>/, () => `<body>\n  ${bodyHtml}\n</body>`)
 }

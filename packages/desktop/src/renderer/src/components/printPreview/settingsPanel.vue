@@ -39,8 +39,8 @@
       <div class="field">
         <label>{{ t('printPreview.settings.orientation') }}</label>
         <el-radio-group
-          :aria-label="t('printPreview.settings.orientation')"
           v-model="settings.isLandscape"
+          :aria-label="t('printPreview.settings.orientation')"
           size="small"
         >
           <el-radio-button :value="false">
@@ -91,8 +91,8 @@
       <div class="field slider">
         <label>{{ t('printPreview.settings.scale') }}</label>
         <el-slider
-          :aria-label="t('printPreview.settings.scale')"
           v-model="settings.printScale"
+          :aria-label="t('printPreview.settings.scale')"
           :min="50"
           :max="200"
           :step="5"
@@ -103,8 +103,8 @@
       <div class="field slider">
         <label>{{ t('printPreview.settings.codeScale') }}</label>
         <el-slider
-          :aria-label="t('printPreview.settings.codeScale')"
           v-model="settings.codeScale"
+          :aria-label="t('printPreview.settings.codeScale')"
           :min="50"
           :max="200"
           :step="5"
@@ -115,8 +115,8 @@
       <div class="field slider">
         <label>{{ t('printPreview.settings.mathScale') }}</label>
         <el-slider
-          :aria-label="t('printPreview.settings.mathScale')"
           v-model="settings.mathScale"
+          :aria-label="t('printPreview.settings.mathScale')"
           :min="50"
           :max="200"
           :step="5"
@@ -141,8 +141,8 @@
         <div class="field slider">
           <label>{{ t('printPreview.settings.fontSize') }}</label>
           <el-slider
-            :aria-label="t('printPreview.settings.fontSize')"
             v-model="settings.fontSize"
+            :aria-label="t('printPreview.settings.fontSize')"
             :min="8"
             :max="32"
             :format-tooltip="(value: number) => `${value}px`"
@@ -152,8 +152,8 @@
         <div class="field slider">
           <label>{{ t('printPreview.settings.lineHeight') }}</label>
           <el-slider
-            :aria-label="t('printPreview.settings.lineHeight')"
             v-model="settings.lineHeight"
+            :aria-label="t('printPreview.settings.lineHeight')"
             :min="1"
             :max="2.4"
             :step="0.1"
@@ -168,8 +168,8 @@
       <div class="field">
         <label>{{ t('printPreview.settings.spacing') }}</label>
         <el-radio-group
-          :aria-label="t('printPreview.settings.spacing')"
           v-model="settings.blockSpacing"
+          :aria-label="t('printPreview.settings.spacing')"
           size="small"
         >
           <el-radio-button value="compact">
@@ -186,8 +186,8 @@
       <div class="field slider">
         <label>{{ t('printPreview.settings.imageWidth') }}</label>
         <el-slider
-          :aria-label="t('printPreview.settings.imageWidth')"
           v-model="settings.imageMaxWidth"
+          :aria-label="t('printPreview.settings.imageWidth')"
           :min="20"
           :max="100"
           :step="5"
@@ -257,8 +257,8 @@
       <div class="field slider">
         <label>{{ t('printPreview.settings.runningSize') }}</label>
         <el-slider
-          :aria-label="t('printPreview.settings.runningSize')"
           v-model="settings.headerFooterFontSize"
+          :aria-label="t('printPreview.settings.runningSize')"
           :min="8"
           :max="20"
           :format-tooltip="(value: number) => `${value}px`"
@@ -305,6 +305,9 @@
           v-model="settings.tocIncludeTopHeading"
         />
       </div>
+      <p class="hint">
+        {{ t('exportSettings.toc.description') }}
+      </p>
     </section>
   </div>
 </template>
